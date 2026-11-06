@@ -31,10 +31,11 @@ Supabase settings; these settings are not consumed by TASK-002.
 
 - Click a voter or Suma header to sort descending, then ascending. Missing scores
   stay last. Click Nr to restore performance order.
-- Enter scores from 1 to 10 in steps of 0.5, with comma or point. Enter or leaving
+- Enter scores from 0 to 10 in steps of 0.5, with comma or point. Values above 10
+  become 10; letters and other fractions are blocked without error messages. Enter or leaving
   the cell confirms; Escape cancels. An empty cell means no submitted score.
 - Use Tab/Shift+Tab to move between cells; Up/Down to move within a voter column.
-- Green shading marks scores 8–10; red shading marks scores below 5. Other scores
+- Green shading marks scores 7–10; red shading marks scores 0–2. Other scores
   stay neutral. Gold/silver/bronze rank badges independently follow competition
   ranks (1, 1, 3) when scores tie. The test data starts with distinct first, second
   and third places. Individual/group podium lists are always displayed below the
@@ -67,7 +68,7 @@ tabular figures. Filled gold/silver/bronze circles mark places inside the spread
 the podium lists use smaller, muted square rank labels.
 No external font request is required.
 
-Verified on 2026-11-06: 16 Vitest domain/component tests, 2 actual Edge browser
+Verified on 2026-11-06: 18 Vitest domain/component tests, 2 actual Edge browser
 tests, production build and fixture-free production preview. Backend behavior has
 not been implemented or tested.
 

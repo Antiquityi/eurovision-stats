@@ -56,15 +56,25 @@ describe('spreadsheet workspace', () => {
         await input.trigger('blur');
         expect(store.getters['contests/entries'][0].ratings.pawel).toBeNull();
     });
-    it('keeps invalid input visible, exposes the reason, and leaves confirmed totals unchanged', async () => {
+    it('blocks invalid input silently and clamps scores above ten', async () => {
         const { wrapper, store } = render();
         const before = store.getters['contests/entries'][0].ratings.pawel;
         await inputFor(wrapper).setValue('7,2');
         await inputFor(wrapper).trigger('keydown', { key: 'Enter' });
-        expect(inputFor(wrapper).attributes('aria-invalid')).toBe('true');
-        expect(wrapper.get('[role="alert"]').text()).toContain('co 0,5');
+        expect(wrapper.find('[role="alert"]').exists()).toBe(false);
         expect(store.getters['contests/entries'][0].ratings.pawel).toBe(before);
-        expect(inputFor(wrapper).element.value).toBe('7,2');
+        expect(inputFor(wrapper).element.value).toBe(String(before));
+        await inputFor(wrapper).setValue('11');
+        expect(inputFor(wrapper).element.value).toBe('10');
+        await inputFor(wrapper).trigger('blur');
+        expect(store.getters['contests/entries'][0].ratings.pawel).toBe(10);
+        await inputFor(wrapper).setValue('0,');
+        await inputFor(wrapper).setValue('0,5');
+        await inputFor(wrapper).trigger('blur');
+        expect(store.getters['contests/entries'][0].ratings.pawel).toBe(0.5);
+        await inputFor(wrapper).setValue('0');
+        await inputFor(wrapper).trigger('blur');
+        expect(store.getters['contests/entries'][0].ratings.pawel).toBe(0);
     });
     it('does not commit unchanged values twice on Enter then blur', async () => {
         const { wrapper, store } = render();

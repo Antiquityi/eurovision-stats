@@ -57,17 +57,16 @@ thead .country, thead .order { z-index: 4; background: var(--header); }
 .country-line { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 500; }
 .country-line img { object-fit: cover; width: 24px; height: 18px; border-radius: 2px; box-shadow: 0 0 0 1px var(--line); }
 .country-line small { display: block; font-size: 10px; color: var(--muted); font-weight: 400; margin-top: 2px; }
-.rating-cell { position: relative; min-width: 120px; padding: 6px 42px 6px 14px; font-family: var(--number-font); font-size: 14px; font-weight: 400; border-right: 1px solid var(--line); }
+.rating-cell { position: relative; min-width: 130px; padding: 6px 42px; font-family: var(--number-font); font-size: 14px; font-weight: 400; border-right: 1px solid var(--line); }
 .rating-cell input { display: block; width: 100%; min-width: 44px; height: 36px; text-align: center; background: transparent; border: 1px solid transparent; border-radius: 3px; color: inherit; outline: none; font-variant-numeric: tabular-nums; transition: border-color 120ms, background 120ms; }
 .rating-cell input::placeholder { color: #687482; }
 .rating-cell input:hover { border-color: #617265; }
 .rating-cell input:focus { background: var(--surface); border-color: var(--color-fn-green); box-shadow: 0 0 0 1px var(--color-fn-green); }
 .rating-cell.has-draft input { color: var(--color-fn-green); }
-.rating-cell.has-error input { border-color: var(--error); }
-.cell-error { display: block; max-width: 140px; padding: 4px 0; color: var(--error); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 10px; line-height: 1.4; text-align: left; }
 .total { position: relative; min-width: 110px; width: 110px; padding: 0 30px; border-left: 1px solid var(--line); background: var(--header); }
 .total strong { font-family: var(--number-font); font-size: 15px; font-weight: 600; }
 .score-high { background: var(--score-high-bg); color: var(--score-high-ink); }
+.score-high.score-seven { background: #33483d; }
 .score-low { background: var(--score-low-bg); color: var(--score-low-ink); }
 .score-empty { color: var(--muted); }
 .medal-1 { --medal-ink: #302511; --medal-bg: #e3bb57; }

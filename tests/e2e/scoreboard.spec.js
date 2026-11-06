@@ -13,9 +13,15 @@ test('spreadsheet editing, invalid input, navigation, sorting and local years', 
     await expect(input).toHaveValue('7,5');
     await expect(page.locator('tbody tr').first().locator('.total strong')).toHaveText('31,5');
     await input.fill('7,2'); await input.press('Enter');
-    await expect(input).toHaveAttribute('aria-invalid', 'true');
-    await expect(page.getByRole('alert')).toContainText('co 0,5');
-    await input.press('ArrowDown'); await expect(input).toBeFocused();
+    await expect(input).toHaveValue('7,5');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await input.fill('11'); await expect(input).toHaveValue('10');
+    await input.fill(''); await input.pressSequentially('0,5'); await input.press('Enter');
+    await expect(input).toHaveValue('0,5');
+    await input.fill('0'); await input.press('Enter'); await expect(input).toHaveValue('0');
+    await input.fill('1,'); await input.pressSequentially('4'); await expect(input).toHaveValue('1,');
+    await input.pressSequentially('5'); await input.press('Enter'); await expect(input).toHaveValue('1,5');
+    await input.fill('7,5'); await input.press('Enter');
     await input.press('Escape'); await expect(input).toHaveValue('7,5');
     await expect(page.getByRole('alert')).toHaveCount(0);
     await input.press('Tab');

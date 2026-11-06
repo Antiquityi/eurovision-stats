@@ -12,7 +12,7 @@ export function createPreviewContests() {
         ['PL', 'Polska', [7, 7, 7.5, 7.5]],
         ['GB', 'Wielka Brytania', [6.5, null, 7, null]],
         ['FR', 'Francja', [6, 7, 6.5, 7]],
-        ['JP', 'Japonia', [3.5, 4, 6, 5.5]],
+        ['JP', 'Japonia', [1.5, 2, 6, 5.5]],
         ['DE', 'Niemcy', [null, null, null, null]],
         ['NO', 'Norwegia', [7, 6.5, 7, 6]],
         ['FI', 'Finlandia', [6, 7.5, 6, 7]],

@@ -1,5 +1,5 @@
 <script>
-import { formatRating, parseRating, ratingTone } from '../domain/ratings.js';
+import { filterRatingInput, formatRating, ratingTone } from '../domain/ratings.js';
 import { cellKey } from '../store/index.js';
 
 export default {
@@ -10,7 +10,6 @@ export default {
         value: { type: Number, default: null },
         medal: { type: Number, default: 0 },
     },
-    data() { return { error: '' }; },
     computed: {
         key() { return cellKey(this.entry.id, this.voter.id); },
         draft() { return this.$store.state.contests.drafts[this.key]; },
@@ -20,19 +19,20 @@ export default {
     methods: {
         formatRating, ratingTone,
         input(event) {
-            this.error = '';
-            this.$store.dispatch('contests/draft', { entryId: this.entry.id, voterId: this.voter.id, text: event.target.value });
+            const text = filterRatingInput(event.target.value, this.text);
+            event.target.value = text;
+            this.$store.dispatch('contests/draft', { entryId: this.entry.id, voterId: this.voter.id, text });
         },
         async commit() {
             if (this.draft === undefined) return true;
-            try {
-                parseRating(this.draft);
-                await this.$store.dispatch('contests/save', { entryId: this.entry.id, voterId: this.voter.id });
-                this.error = ''; return true;
-            } catch (error) { this.error = error.message; return false; }
+            // A trailing comma is a typing intermediate, not a persisted decimal.
+            if (this.draft.endsWith(',')) {
+                await this.$store.dispatch('contests/draft', { entryId: this.entry.id, voterId: this.voter.id, text: this.draft.slice(0, -1) });
+            }
+            await this.$store.dispatch('contests/save', { entryId: this.entry.id, voterId: this.voter.id });
+            return true;
         },
         cancel(event) {
-            this.error = '';
             this.$store.dispatch('contests/cancel', this.key);
             event.target.value = this.value === null ? '' : formatRating(this.value);
             // Keep focus in the sheet; do not generate a blur commit after cancel.
@@ -53,14 +53,13 @@ export default {
 </script>
 
 <template>
-    <td class="rating-cell" :class="[{ 'has-error': error, 'has-draft': draft !== undefined }, ratingTone(value)]">
+    <td class="rating-cell" :class="[{ 'has-draft': draft !== undefined, 'score-seven': value === 7 || value === 7.5 }, ratingTone(value)]">
         <input v-if="editable" :value="text" type="text" inputmode="decimal" autocomplete="off" maxlength="8"
-            :aria-label="`${entry.countryName}, ${voter.name}`" :aria-invalid="Boolean(error)"
-            :aria-describedby="[error ? 'error-' + key : null, medal ? 'rank-' + key : null].filter(Boolean).join(' ') || undefined" placeholder="—"
+            :aria-label="`${entry.countryName}, ${voter.name}`"
+            :aria-describedby="medal ? 'rank-' + key : undefined" placeholder="—"
             @input="input" @blur="commit" @keydown.enter.prevent="commit" @keydown.esc.prevent="cancel"
             @keydown.up="navigate" @keydown.down="navigate" />
         <span v-else>{{ formatRating(value) }}</span>
         <span v-if="medal" :id="'rank-' + key" class="medal-marker" :class="'medal-' + medal" :title="'Miejsce ' + medal"><span class="sr-only">Miejsce </span>{{ medal }}</span>
-        <span v-if="error" :id="'error-' + key" class="cell-error" role="alert">{{ error }}</span>
     </td>
 </template>
