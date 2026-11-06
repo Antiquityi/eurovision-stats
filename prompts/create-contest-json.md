@@ -25,8 +25,6 @@ Use this exact structure, illustrated with one entry:
       "order": 1,
       "countryCode": "DK",
       "countryName": "Dania",
-      "artist": null,
-      "song": null,
       "ratings": {
         "pawel": null,
         "albert": null,
@@ -42,7 +40,7 @@ Rules:
 - Extract every entry exactly once in performance order. Read numbered graphics by their printed numbers, not the image's row-by-row visual layout. For an unnumbered spreadsheet use its displayed country row order; if it is visibly sorted by score and performance order is unavailable, ask for the running order.
 - Use uppercase ISO 3166-1 alpha-2 country codes, including GB for United Kingdom. Country codes let the app render flags; do not add flag URLs, image data, or emoji fields. If a territory has no unambiguous supported code, ask rather than inventing one.
 - Use Polish contest titles: for Eurovision use "Eurowizja [YEAR]", even when the source uses the English name.
-- Use Polish country names with correct diacritics, translating source labels when needed, for example Denmark to Dania, Germany to Niemcy, United Kingdom to Wielka Brytania, and Italy to Włochy. Keep ISO country codes unchanged. Preserve all countries shown even when they belong to a contest other than Eurovision. Artist and song fields must be null unless explicitly supplied. Preserve their original spelling and punctuation when supplied; do not translate artist or song names. Keep JSON field names in English as shown in the schema.
+- Use Polish country names with correct diacritics, translating source labels when needed, for example Denmark to Dania, Germany to Niemcy, United Kingdom to Wielka Brytania, and Italy to Włochy. Keep ISO country codes unchanged. Preserve all countries shown even when they belong to a contest other than Eurovision. Ignore artist and song information. Keep JSON field names in English as shown in the schema.
 - For a running-order source with no votes, create the default voters and set every rating to null. Do not generate sample scores.
 - For a completed spreadsheet, extract the actual voter names and every visible rating. Create unique lowercase ASCII voter IDs, converting Paweł to pawel, and use exactly those IDs as the ratings keys in every entry. If names cannot be uniquely identified, ask for clarification.
 - Ratings must be JSON numbers from 0 through 10 in increments of 0.5, or null for a blank cell. Zero is a submitted score; a blank is null. Convert decimal commas such as 5,5 to the number 5.5. If a source score falls outside these rules, ask for clarification rather than changing it.

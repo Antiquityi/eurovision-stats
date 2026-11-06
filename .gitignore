@@ -12,6 +12,11 @@ coverage/
 .vite/
 playwright-report/
 test-results/
+supabase/.temp/
+supabase/.branches/
+
+# One-off local database reset helper; keep migrations and SQL tests tracked
+/supabase/reset-development.sql
 
 # Local environment and secrets
 .env

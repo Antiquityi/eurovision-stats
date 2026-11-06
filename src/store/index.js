@@ -1,17 +1,19 @@
 import { createStore } from 'vuex';
 import { parseRating } from '../domain/ratings.js';
+import { createAuthModule } from './auth.js';
 
 export const cellKey = (entryId, voterId) => `${entryId}:${voterId}`;
 
-// Frontend-only state for TASK-002. No authentication or persistence adapter.
-export function createScoreboardStore(contests = [], { editable = false } = {}) {
+export function createScoreboardStore(contests = [], { editable = false, auth = {}, selectedYear = null } = {}) {
     const copies = structuredClone(contests);
     return createStore({
-        state: { preview: copies.length > 0, editable },
+        state: { preview: copies.length > 0 && !auth.configured, editable: editable && !auth.configured },
+        getters: { canEdit: state => state.preview ? state.editable : state.auth.isEditor },
         modules: {
+            auth: createAuthModule(auth),
             contests: {
                 namespaced: true,
-                state: () => ({ list: copies, active: copies[0] ?? null, drafts: {} }),
+                state: () => ({ list: copies, active: copies.find(contest => String(contest.year) === selectedYear) ?? copies[0] ?? null, drafts: {} }),
                 getters: { entries: state => state.active?.entries ?? [] },
                 mutations: {
                     select(state, id) { state.active = state.list.find(contest => contest.id === id) ?? null; },
@@ -29,7 +31,7 @@ export function createScoreboardStore(contests = [], { editable = false } = {}) 
                     },
                     cancel({ commit }, key) { commit('clearDraft', key); },
                     save({ state, rootState, commit }, { entryId, voterId }) {
-                        if (!rootState.editable) return;
+                        if (!rootState.preview || !rootState.editable) return;
                         const key = cellKey(entryId, voterId);
                         if (!Object.hasOwn(state.drafts, key)) return;
                         const value = parseRating(state.drafts[key]);

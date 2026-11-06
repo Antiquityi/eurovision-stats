@@ -34,7 +34,7 @@ export function createPreviewContests() {
         ['AU', 'Australia', [4.5, 5, 6, 5.5]],
     ].map(([countryCode, countryName, values], i) => ({
         id: `${year}-${countryCode}`,
-        order: i + 1, countryCode, countryName, artist: null, song: null,
+        order: i + 1, countryCode, countryName,
         ratings: Object.fromEntries(['pawel', 'albert', 'aneta', 'kuba'].map((key, j) => [key, values[j] === null ? null : Math.max(1, values[j] - index)])),
     })),
     }));

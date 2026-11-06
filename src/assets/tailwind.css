@@ -42,6 +42,11 @@ h1, h2, p { margin: 0; }
 .chip-unselected { color: var(--muted); }
 .year-tabs button:hover { background: var(--hover); }
 .preview-label { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.auth-controls { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+.auth-controls button { border: 1px solid var(--line); border-radius: 4px; padding: 6px 9px; background: var(--surface); }
+.auth-controls button:hover { background: var(--hover); }
+.auth-controls button:disabled { opacity: .5; cursor: wait; }
+.auth-error { color: var(--error); flex-basis: 100%; text-align: right; }
 .scoreboard { background: var(--surface); border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
 .table-scroll { position: relative; overflow: auto; max-height: max(320px, calc(100svh - 280px)); scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 760px; font-variant-numeric: tabular-nums; text-align: center; }
@@ -56,7 +61,6 @@ thead button { border: 0; background: transparent; padding: 12px 0; width: 100%;
 thead .country, thead .order { z-index: 4; background: var(--header); }
 .country-line { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 500; }
 .country-line img { object-fit: cover; width: 24px; height: 18px; border-radius: 2px; box-shadow: 0 0 0 1px var(--line); }
-.country-line small { display: block; font-size: 10px; color: var(--muted); font-weight: 400; margin-top: 2px; }
 .rating-cell { position: relative; min-width: 130px; padding: 6px 42px; font-family: var(--number-font); font-size: 14px; font-weight: 400; border-right: 1px solid var(--line); }
 .rating-cell input { display: block; width: 100%; min-width: 44px; height: 36px; text-align: center; background: transparent; border: 1px solid transparent; border-radius: 3px; color: inherit; outline: none; font-variant-numeric: tabular-nums; transition: border-color 120ms, background 120ms; }
 .rating-cell input::placeholder { color: #687482; }

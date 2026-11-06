@@ -40,7 +40,7 @@ export default {
                 </tr></thead>
                 <tbody><tr v-for="entry in rows" :key="entry.id">
                     <td class="order">{{ String(entry.order).padStart(2, '0') }}</td>
-                    <th scope="row" class="country"><div class="country-line"><img :src="flag(entry.countryCode)" alt="" width="28" height="21" /><div>{{ entry.countryName }}<small v-if="entry.artist || entry.song">{{ [entry.artist, entry.song].filter(Boolean).join(' · ') }}</small></div></div></th>
+                    <th scope="row" class="country"><div class="country-line"><img :src="flag(entry.countryCode)" alt="" width="28" height="21" /><div>{{ entry.countryName }}</div></div></th>
                     <RatingCell v-for="voter in contest.voters" :key="voter.id" :entry="entry" :voter="voter" :value="entry.ratings[voter.id]" :medal="medals[voter.id][entry.id] || 0" />
                     <td class="total" :title="summarize(entry).count > 0 && summarize(entry).count < summarize(entry).possible ? 'Suma niepełna' : undefined"><strong>{{ formatRating(summarize(entry).total) }}</strong><span v-if="medals.total[entry.id]" class="medal-marker" :class="'medal-' + medals.total[entry.id]" :title="'Miejsce ' + medals.total[entry.id]"><span class="sr-only">Miejsce </span>{{ medals.total[entry.id] }}</span></td>
                 </tr></tbody>

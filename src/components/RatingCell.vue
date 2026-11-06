@@ -13,7 +13,7 @@ export default {
     computed: {
         key() { return cellKey(this.entry.id, this.voter.id); },
         draft() { return this.$store.state.contests.drafts[this.key]; },
-        editable() { return this.$store.state.editable; },
+        editable() { return this.$store.getters.canEdit; },
         text() { return this.draft ?? (this.value === null ? '' : formatRating(this.value)); },
     },
     methods: {
