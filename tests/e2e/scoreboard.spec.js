@@ -1,0 +1,56 @@
+import { test, expect } from '@playwright/test';
+
+test('spreadsheet editing, invalid input, navigation, sorting and local years', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto('/');
+    await expect(page.getByText('Dane testowe')).toBeVisible();
+    await expect(page.locator('footer')).toHaveCount(0);
+    await expect(page.locator('tbody tr')).toHaveCount(26);
+    await expect(page.getByRole('region', { name: 'Podium' })).toBeInViewport();
+    const input = page.getByRole('textbox', { name: 'Dania, Paweł', exact: true });
+    await input.fill('7,5'); await input.press('Enter');
+    await expect(input).toHaveValue('7,5');
+    await expect(page.locator('tbody tr').first().locator('.total strong')).toHaveText('31,5');
+    await input.fill('7,2'); await input.press('Enter');
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('alert')).toContainText('co 0,5');
+    await input.press('ArrowDown'); await expect(input).toBeFocused();
+    await input.press('Escape'); await expect(input).toHaveValue('7,5');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await input.press('Tab');
+    await expect(page.getByRole('textbox', { name: 'Dania, Albert', exact: true })).toBeFocused();
+    await page.keyboard.press('Shift+Tab'); await expect(input).toBeFocused();
+    await input.press('ArrowDown');
+    await expect(page.getByRole('textbox', { name: 'Szwecja, Paweł', exact: true })).toBeFocused();
+    await page.locator('[data-sort="total"]').click();
+    await expect(page.locator('tbody tr').first().locator('.country')).toContainText('Szwecja');
+    await page.locator('[data-sort="order"]').click();
+    await page.getByRole('button', { name: '2024', exact: true }).click();
+    await expect(input).toHaveValue('7');
+    await page.getByRole('button', { name: '2025', exact: true }).click();
+    await expect(input).toHaveValue('7,5');
+    await expect(page.getByRole('region', { name: 'Podium' })).toBeVisible();
+    expect(errors).toEqual([]);
+    await page.screenshot({ path: 'test-results/task-002-desktop.png', fullPage: true });
+});
+
+test('mobile table scrolls horizontally while country and header context stay visible', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    const scroll = page.getByRole('region', { name: 'Tabela ocen' }).locator('.table-scroll');
+    const country = page.locator('tbody .country').first();
+    const before = await country.boundingBox();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await scroll.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+    await scroll.evaluate(element => { element.scrollLeft = 200; });
+    const after = await country.boundingBox();
+    expect(Math.abs(before.x - after.x)).toBeLessThan(1);
+    await expect(country).toBeVisible();
+    await page.screenshot({ path: 'test-results/task-002-mobile.png', fullPage: true });
+    await page.setViewportSize({ width: 390, height: 320 });
+    const header = page.locator('thead .country');
+    const top = (await header.boundingBox()).y;
+    await scroll.evaluate(element => { element.scrollTop = 120; });
+    expect(Math.abs((await header.boundingBox()).y - top)).toBeLessThan(1);
+});

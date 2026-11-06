@@ -1,0 +1,41 @@
+// Deliberately synthetic: these are UI test cases, not Eurovision history.
+export function createPreviewContests() {
+    return [2025, 2024].map((year, index) => ({
+    id: `fixture-${year}`,
+    year,
+    title: `Eurowizja ${year}`,
+    voters: [{ id: 'pawel', name: 'Paweł' }, { id: 'albert', name: 'Albert' }, { id: 'aneta', name: 'Aneta' }, { id: 'kuba', name: 'Kuba' }],
+    entries: [
+        ['DK', 'Dania', [8, 8, 8, 8]],
+        ['SE', 'Szwecja', [9.5, 9.5, 9.5, 9.5]],
+        ['IT', 'Włochy', [9, 9, 9, 9]],
+        ['PL', 'Polska', [7, 7, 7.5, 7.5]],
+        ['GB', 'Wielka Brytania', [6.5, null, 7, null]],
+        ['FR', 'Francja', [6, 7, 6.5, 7]],
+        ['JP', 'Japonia', [3.5, 4, 6, 5.5]],
+        ['DE', 'Niemcy', [null, null, null, null]],
+        ['NO', 'Norwegia', [7, 6.5, 7, 6]],
+        ['FI', 'Finlandia', [6, 7.5, 6, 7]],
+        ['IS', 'Islandia', [5.5, 6, 5, 6.5]],
+        ['EE', 'Estonia', [6.5, 5, 7, 5.5]],
+        ['LT', 'Litwa', [7, 6.5, 6, 7]],
+        ['LV', 'Łotwa', [5, 4.5, 6, 5.5]],
+        ['ES', 'Hiszpania', [7.5, 6, 7, 6.5]],
+        ['PT', 'Portugalia', [6, 5.5, 6.5, 7]],
+        ['CH', 'Szwajcaria', [7, 7.5, 7, 6.5]],
+        ['AT', 'Austria', [6.5, 7, 6, 7.5]],
+        ['NL', 'Holandia', [7, 6, 7.5, 6.5]],
+        ['BE', 'Belgia', [5.5, 6, 6.5, 5]],
+        ['GR', 'Grecja', [6, 7, 5.5, 6.5]],
+        ['CY', 'Cypr', [5, 6.5, 6, 7]],
+        ['HR', 'Chorwacja', [7.5, 7, 6.5, 6]],
+        ['RS', 'Serbia', [6, 5.5, 7, 6.5]],
+        ['UA', 'Ukraina', [7, 7.5, 6, 7]],
+        ['AU', 'Australia', [4.5, 5, 6, 5.5]],
+    ].map(([countryCode, countryName, values], i) => ({
+        id: `${year}-${countryCode}`,
+        order: i + 1, countryCode, countryName, artist: null, song: null,
+        ratings: Object.fromEntries(['pawel', 'albert', 'aneta', 'kuba'].map((key, j) => [key, values[j] === null ? null : Math.max(1, values[j] - index)])),
+    })),
+    }));
+}
