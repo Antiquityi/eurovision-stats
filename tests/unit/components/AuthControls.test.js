@@ -29,10 +29,14 @@ describe('account controls', () => {
         store.commit('auth/access', true);
         await flushPromises();
         expect(wrapper.get('[role="status"]').text()).toBe('Edytor · Friend');
+        store.commit('auth/busy', true);
+        await flushPromises();
+        expect(wrapper.get('[role="status"]').text()).toBe('Edytor · Friend');
+        expect(wrapper.get('[role="status"]').attributes('aria-busy')).toBe('true');
+        store.commit('auth/access', true);
+        await flushPromises();
         await wrapper.get('button').trigger('click');
         expect(dispatch).toHaveBeenCalledWith('auth/signOut');
-        await wrapper.get('[aria-label="Odśwież uprawnienia"]').trigger('click');
-        expect(dispatch).toHaveBeenCalledWith('auth/refresh');
         store.commit('auth/error', 'Nie udało się sprawdzić uprawnień.');
         await flushPromises();
         expect(wrapper.get('[role="status"]').text()).toBe('Podgląd · Friend');

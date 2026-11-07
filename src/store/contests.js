@@ -1,7 +1,9 @@
 import { parseRating } from '../domain/ratings.js';
 import { normalizeVoterName } from '../domain/voters.js';
+import { podiumTies } from '../domain/ranking.js';
 
 export const cellKey = (entryId, voterId) => `${entryId}:${voterId}`;
+const newestFirst = contests => [...contests].sort((a, b) => b.year - a.year);
 
 export function createContestsModule(copies, { service = null, realtime = null, selectedYear = null, browser = globalThis.window } = {}) {
     let running = false;
@@ -11,6 +13,7 @@ export function createContestsModule(copies, { service = null, realtime = null, 
     let listeners = [];
     let refresh = null;
     let refreshAgain = false;
+    let requestedYear = selectedYear;
     const queues = new Map();
     const enqueued = new Map();
     const forgetVoter = (state, contest, voterId) => {
@@ -29,12 +32,18 @@ export function createContestsModule(copies, { service = null, realtime = null, 
     };
     return {
         namespaced: true,
-        state: () => ({ list: copies, active: copies.find(contest => String(contest.year) === String(selectedYear)) ?? copies[0] ?? null,
-            drafts: {}, versions: {}, cancellations: {}, cells: {}, confirmed: {}, selectedId: null,
-            loading: false, connected: false, stale: Boolean(service), error: '', voterBusy: false }),
+        state: () => {
+            const list = newestFirst(copies);
+            return {
+                list,
+                active: list.find(contest => String(contest.year) === String(selectedYear)) ?? list[0] ?? null,
+                drafts: {}, versions: {}, cancellations: {}, cells: {}, confirmed: {}, selectedId: null,
+                loading: false, connected: false, stale: Boolean(service), error: '', voterBusy: false,
+            };
+        },
         getters: { entries: state => state.active?.entries ?? [] },
         mutations: {
-            list(state, list) { state.list = list; },
+            list(state, list) { state.list = newestFirst(list); },
             select(state, id) { state.selectedId = id; state.active = copies.find(contest => contest.id === id) ?? null; },
             draft(state, { key, text }) {
                 state.drafts[key] = text;
@@ -77,6 +86,13 @@ export function createContestsModule(copies, { service = null, realtime = null, 
                 if (entry && Object.hasOwn(entry.ratings, voterId)) entry.ratings[voterId] = value;
             },
             voterBusy(state, value) { state.voterBusy = value; },
+            previewTie(state, { scope, score, entryIds, reset }) {
+                const tie = podiumTies(state.active.entries, scope).find(group => group.score === score);
+                state.active.tieBreaks ??= {};
+                state.active.tieBreaks[scope] ??= {};
+                if (reset) delete state.active.tieBreaks[scope][tie.key];
+                else state.active.tieBreaks[scope][tie.key] = [...entryIds];
+            },
             previewVoter(state, { action, voterId, name }) {
                 const contest = state.active;
                 if (action === 'add') {
@@ -92,6 +108,30 @@ export function createContestsModule(copies, { service = null, realtime = null, 
             },
         },
         actions: {
+            async resolveTie({ state, rootState, rootGetters, commit, dispatch }, selection) {
+                if (!rootGetters.canCommit || !state.active) throw new Error('Zmiana jest teraz niedostępna.');
+                const { scope, score, entryIds } = selection;
+                if (scope !== 'total' && !state.active.voters.some(voter => voter.id === scope)) throw new Error('Nieznane podium.');
+                const tie = podiumTies(state.active.entries, scope).find(group => group.score === score);
+                if (!tie || !Array.isArray(entryIds) || entryIds.length !== tie.entries.length
+                    || new Set(entryIds).size !== entryIds.length || !tie.entries.every(entry => entryIds.includes(entry.id))) {
+                    throw new Error('Remis się zmienił. Otwórz wybór ponownie.');
+                }
+                const contestId = state.active.id;
+                const operation = lifecycle;
+                if (rootState.preview) {
+                    commit('previewTie', selection);
+                    return;
+                }
+                try {
+                    await service.resolveTie(contestId, selection);
+                    if (refresh) await refresh;
+                    if (running && operation === lifecycle && state.active?.id === contestId) await dispatch('refresh');
+                } catch {
+                    if (running && operation === lifecycle) void dispatch('auth/refresh', null, { root: true });
+                    throw new Error('Nie udało się zapisać kolejności. Odśwież wyniki i spróbuj ponownie.');
+                }
+            },
             async manageVoter({ state, rootState, rootGetters, commit, dispatch }, { action, voterId = null, name = null }) {
                 if (!rootGetters.canCommit || state.voterBusy || !state.active) return false;
                 if (!['add', 'rename', 'delete'].includes(action)) throw new Error('Invalid action');
@@ -118,13 +158,15 @@ export function createContestsModule(copies, { service = null, realtime = null, 
                 }
             },
             start({ dispatch }) {
-                if (!service || !realtime || running) return;
+                if (running) return;
                 running = true;
                 ++lifecycle;
                 const listen = (target, name, callback) => {
                     target.addEventListener(name, callback);
                     listeners.push(() => target.removeEventListener(name, callback));
                 };
+                listen(browser, 'popstate', () => dispatch('navigate'));
+                if (!service || !realtime) return;
                 listen(browser, 'offline', () => dispatch('offline'));
                 listen(browser, 'online', () => dispatch('connect'));
                 const onReturn = () => {
@@ -175,7 +217,7 @@ export function createContestsModule(copies, { service = null, realtime = null, 
                 const request = generation;
                 const current = () => running && request === generation;
                 commit('loading', true);
-                // Revoke UI permission immediately while rechecking membership.
+                // Recheck membership without replacing the confirmed role or moving editor controls.
                 const membership = dispatch('auth/refresh', null, { root: true });
                 refresh = (async () => {
                     try {
@@ -183,9 +225,9 @@ export function createContestsModule(copies, { service = null, realtime = null, 
                         if (!current()) return;
                         commit('list', list);
                         const id = list.find(contest => contest.id === state.selectedId)?.id
-                            ?? list.find(contest => String(contest.year) === String(selectedYear))?.id ?? list[0]?.id ?? null;
+                            ?? list.find(contest => String(contest.year) === String(requestedYear))?.id ?? state.list[0]?.id ?? null;
                         if (id !== state.selectedId) {
-                            await dispatch('select', id);
+                            await dispatch('select', { id, replace: true });
                             return;
                         }
                         if (id) {
@@ -206,7 +248,23 @@ export function createContestsModule(copies, { service = null, realtime = null, 
                 })();
                 return refresh;
             },
-            select({ commit, dispatch }, id) {
+            navigate({ state, dispatch }) {
+                requestedYear = new URL(browser.location.href).searchParams.get('year');
+                const contest = state.list.find(item => String(item.year) === String(requestedYear)) ?? state.list[0];
+                if (contest && contest.id !== state.selectedId) return dispatch('select', { id: contest.id, replace: true });
+            },
+            select({ state, commit, dispatch }, selection) {
+                const { id, replace = false } = typeof selection === 'object' && selection !== null ? selection : { id: selection };
+                if (id === state.selectedId) return;
+                const contest = state.list.find(item => item.id === id);
+                if (id !== null && !contest && !service) return;
+                requestedYear = contest?.year ?? requestedYear;
+                if (browser?.location && browser?.history && contest) {
+                    const url = new URL(browser.location.href);
+                    url.searchParams.set('year', contest.year);
+                    if (replace || url.search === browser.location.search) browser.history.replaceState(null, '', url);
+                    else browser.history.pushState(null, '', url);
+                }
                 commit('select', id);
                 if (service) return dispatch('connect');
             },

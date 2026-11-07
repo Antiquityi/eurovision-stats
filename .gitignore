@@ -7,6 +7,7 @@
 
 # Dependencies and build output
 node_modules/
+.npm-cache/
 dist/
 coverage/
 .vite/
@@ -15,8 +16,9 @@ test-results/
 supabase/.temp/
 supabase/.branches/
 
-# One-off local database reset helper; keep migrations and SQL tests tracked
+# One-off local data scripts; keep schema migrations and SQL tests tracked
 /supabase/reset-development.sql
+/supabase/manual/
 
 # Local environment and secrets
 .env

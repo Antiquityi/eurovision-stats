@@ -13,12 +13,12 @@ export default {
     computed: {
         contest() { return this.$store.state.contests.active; },
         entries() { return this.$store.getters['contests/entries']; },
-        rows() { return sortedEntries(this.entries, this.sortKey, this.direction); },
+        rows() { return sortedEntries(this.entries, this.sortKey, this.direction, this.contest.tieBreaks?.[this.sortKey]); },
         editable() { return this.$store.getters.canEdit; },
         canManage() { return this.$store.getters.canCommit && !this.$store.state.contests.voterBusy; },
         medals() {
             return Object.fromEntries(['total', ...this.contest.voters.map(v => v.id)].map(key => [key,
-                Object.fromEntries(podium(this.entries, key).map(e => [e.id, e.rank]))]));
+                Object.fromEntries(podium(this.entries, key, this.contest.tieBreaks?.[key]).map(e => [e.id, e.rank]))]));
         },
     },
     watch: {

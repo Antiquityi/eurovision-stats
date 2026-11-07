@@ -23,7 +23,10 @@ const service = {
 };
 const auth = { configured: true, service: {
     async getSession() { return { user: { id: 'friend' } }; },
-    async isEditor() { return control.editor; },
+    async isEditor() {
+        if (control.pauseMembership) await new Promise(resolve => { control.releaseMembership = resolve; });
+        return control.editor;
+    },
     subscribe() { return () => {}; }
 } };
 const realtime = { subscribe(id, callbacks) {
@@ -38,6 +41,34 @@ createApp(App).use(control.store).mount('#app');
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'onLine', { get: () => true, configurable: true }));
     await page.route(/\/src\/main\.js(?:\?.*)?$/, route => route.fulfill({ contentType: 'application/javascript', body: bootstrap }));
+});
+
+test('background permission checks keep role, editor controls and table position stable', async ({ page }) => {
+    await page.goto('/');
+    const input = page.getByRole('textbox', { name: 'Polska, Anna', exact: true });
+    await expect(input).toHaveValue('2');
+    await expect.poll(() => page.evaluate(() => window.voting.store.state.auth.busy)).toBe(false);
+    const before = await page.locator('.scoreboard').boundingBox();
+    await page.evaluate(() => {
+        window.voting.pauseMembership = true;
+        window.voting.refreshing = window.voting.store.dispatch('auth/refresh');
+    });
+    await expect.poll(() => page.evaluate(() => Boolean(window.voting.releaseMembership))).toBe(true);
+    await expect(page.locator('.auth-controls [role="status"]')).toHaveText('Edytor · GitHub');
+    await expect(input).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Dodaj osobę', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Dodaj osobę', exact: true })).toBeDisabled();
+    expect(await page.evaluate(() => window.voting.store.getters.canCommit)).toBe(false);
+    const during = await page.locator('.scoreboard').boundingBox();
+    expect(during.y).toBe(before.y);
+    expect(during.height).toBe(before.height);
+    await page.evaluate(async () => {
+        window.voting.pauseMembership = false;
+        window.voting.releaseMembership();
+        await window.voting.refreshing;
+    });
+    await expect(page.getByRole('button', { name: 'Dodaj osobę', exact: true })).toBeEnabled();
+    expect((await page.locator('.scoreboard').boundingBox()).y).toBe(before.y);
 });
 
 test('confirmed totals, Enter/blur deduplication, cancel, failure and retry', async ({ page }) => {

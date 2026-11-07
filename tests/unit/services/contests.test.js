@@ -11,6 +11,16 @@ function sdk(result) {
 }
 
 describe('contest SDK boundary', () => {
+    it('saves or resets a tie through the permission-checked RPC', async () => {
+        const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
+        const service = createContestService({ rpc });
+        await service.resolveTie('year', { scope: 'v', score: 6.5, entryIds: ['b', 'a'] });
+        expect(rpc).toHaveBeenLastCalledWith('resolve_podium_tie', {
+            p_contest_id: 'year', p_scope: 'v', p_score: 6.5, p_entry_ids: ['b', 'a'], p_reset: false,
+        });
+        rpc.mockResolvedValueOnce({ data: null, error: new Error('Denied') });
+        await expect(service.resolveTie('year', { scope: 'total', score: 6.5, entryIds: ['b', 'a'], reset: true })).rejects.toThrow('Denied');
+    });
     it('uses the permission-checked RPC for person changes and validates names', async () => {
         const rpc = vi.fn().mockResolvedValue({ data: 'new-id', error: null });
         const service = createContestService({ rpc });

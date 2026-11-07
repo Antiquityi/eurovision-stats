@@ -14,8 +14,9 @@ export function createAuthModule({ service = null, configured = false, configErr
         mutations: {
             session(state, session) {
                 // Do not copy OAuth/access tokens into application state.
+                // Keep the confirmed role for the same user; busy blocks writes while it is rechecked.
+                if (state.user?.id !== session?.user?.id || !session) state.isEditor = false;
                 state.user = session?.user ? { id: session.user.id, name: session.user.user_metadata?.user_name || 'GitHub' } : null;
-                state.isEditor = false;
                 state.busy = Boolean(session);
                 state.error = '';
             },
@@ -61,7 +62,6 @@ export function createAuthModule({ service = null, configured = false, configErr
             async refresh({ commit, dispatch }) {
                 if (!running || !service || signingOut) return;
                 const request = ++generation;
-                commit('access', false);
                 commit('busy', true);
                 try {
                     const session = await service.getSession();

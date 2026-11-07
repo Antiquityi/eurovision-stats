@@ -29,6 +29,29 @@ async function harness(options = {}) {
 }
 
 describe('live confirmed state and per-cell writes', () => {
+    it('saves a tie and reloads shared choices without changing scores or another scope', async () => {
+        const h = await harness();
+        const tied = snapshot();
+        tied.entries.push({ ...tied.entries[0], id: 'second', order: 2, ratings: { voter: 1, other: null } });
+        tied.ratings.push({ ...row(1), entry_id: 'second' });
+        h.store.commit('contests/snapshot', tied);
+        h.service.resolveTie = vi.fn().mockResolvedValue(null);
+        const refreshed = structuredClone(tied);
+        refreshed.tieBreaks = { voter: { '2:entry,second': ['second', 'entry'] } };
+        h.service.getContest.mockResolvedValue(refreshed);
+        const selection = { scope: 'voter', score: 1, entryIds: ['second', 'entry'], reset: false };
+        await h.store.dispatch('contests/resolveTie', selection);
+        expect(h.service.resolveTie).toHaveBeenCalledExactlyOnceWith('contest', selection);
+        expect(h.store.state.contests.active.tieBreaks).toEqual(refreshed.tieBreaks);
+        expect(h.value()).toBe(1);
+        expect(h.store.state.contests.active.tieBreaks.total).toBeUndefined();
+        h.store.commit('auth/access', true);
+        await expect(h.store.dispatch('contests/resolveTie', { ...selection, entryIds: ['entry', 'entry'] })).rejects.toThrow('Remis');
+        h.store.commit('auth/access', false);
+        await expect(h.store.dispatch('contests/resolveTie', selection)).rejects.toThrow('niedostępna');
+        expect(h.service.resolveTie).toHaveBeenCalledTimes(1);
+        await h.stop();
+    });
     it('refreshes a successful structural change and removes deleted drafts without disturbing other cells', async () => {
         const h = await harness();
         h.service.manageVoter = vi.fn().mockResolvedValue('voter');
@@ -214,6 +237,23 @@ describe('live confirmed state and per-cell writes', () => {
         expect(h.store.state.contests.active.id).toBe('another');
         expect(h.store.state.contests.active.entries[0].ratings.voter).toBeNull();
         expect(h.store.state.contests.drafts['entry:voter']).toBe('9');
+        await h.stop();
+    });
+    it('does not apply an in-flight save from the previous year to the newly selected table', async () => {
+        const pending = deferred();
+        const h = await harness();
+        h.service.saveRating.mockReturnValueOnce(pending.promise);
+        await h.draft('9'); const saving = h.save(); await flushPromises();
+        const different = { ...snapshot(), id: 'another', year: 2025,
+            entries: [{ ...snapshot().entries[0], id: 'different', ratings: { voter: null, other: null } }], ratings: [] };
+        h.service.listContests.mockResolvedValue([summary, { id: 'another', year: 2025 }]);
+        h.service.getContest.mockResolvedValue(different);
+        await h.store.dispatch('contests/select', 'another');
+        h.subscriptions.at(-1).status('SUBSCRIBED'); await flushPromises();
+        pending.resolve(row(9, 2)); await saving;
+        expect(h.store.state.contests.active.id).toBe('another');
+        expect(h.store.state.contests.active.entries[0].ratings.voter).toBeNull();
+        expect(h.store.state.contests.confirmed['entry:voter'].value).toBe(9);
         await h.stop();
     });
     it('treats an empty backend truthfully and refreshes summaries on contest events', async () => {

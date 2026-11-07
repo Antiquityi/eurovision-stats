@@ -5,7 +5,9 @@ Tailwind CSS. TASK-001 and TASK-002 are accepted. TASK-003 adds the Supabase sch
 database permissions and GitHub account controls; the user verified real login
 and approval locally. TASK-004 implements real score loading, per-cell saving,
 revision-based realtime updates and reconnect recovery; user accepted local behavior.
-Imports, backups and GitHub Pages deployment remain later tasks.
+Year tabs support newest-first selection and browser back/forward navigation.
+Historical data is provisioned manually; there is no browser import workflow.
+GitHub Pages publication is the remaining TASK-006.
 
 ## Run locally
 
@@ -94,9 +96,6 @@ repository path and remove the temporary override afterward with
 `Remove-Item Env:VITE_BASE_PATH`. Local environment files, build output and test
 reports are ignored. No privileged credentials belong in frontend environment variables.
 
-The [screenshot-to-JSON prompt](prompts/create-contest-json.md) is retained for the
-future import task.
-
 ## Configure Supabase and GitHub (TASK-003)
 
 Use a disposable development Supabase project first. Localhost connects to that
@@ -112,7 +111,8 @@ project's real database. No migration has been applied by this implementation.
    [access](supabase/migrations/20261106000200_access.sql), then
    [entry metadata removal](supabase/migrations/20261106000300_remove_entry_metadata.sql), then
    [realtime publication](supabase/migrations/20261107000100_realtime.sql), then
-   [person management](supabase/migrations/20261107000200_manage_voters.sql).
+   [person management](supabase/migrations/20261107000200_manage_voters.sql), then
+   [podium ties](supabase/migrations/20261107000500_podium_ties.sql).
    Each is transactional.
    Apply each once to a fresh project; preserve applied history and make later
    schema corrections with new forward migrations. Never reset a database with
@@ -163,7 +163,8 @@ identities, revisions, timestamps, structures and approvals. The trigger owns
 revision/timestamp generation. Scores accept null or exact half points from 0 to
 10; totals/ranks are calculated in the frontend. See
 [Supabase column privileges](https://supabase.com/docs/guides/database/postgres/column-level-security).
-Import RPCs and rating-row creation for whole contests will arrive with TASK-005.
+Whole contests and their complete rating matrices are provisioned through reviewed
+owner-run SQL scripts. There is no client import RPC.
 
 Approved editors can also manage the current year's person columns. Click
 **Dodaj osobę** in the workspace header to confirm adding a blank column. Open
@@ -228,13 +229,8 @@ migrations. It adds only `contests` and `ratings` to `supabase_realtime`, preser
 all rows and existing policies. This follows [Supabase Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes).
 No migration or seed has been applied remotely by the agent.
 
-Until imports arrive in TASK-005, the owner can run
-[task-004-demo.sql](supabase/manual/task-004-demo.sql) in a **disposable development
-project** to create a synthetic 2099 tab with three countries, two voters and six
-blank ratings. It aborts if that year exists and never replaces scores. It is an
-optional manual fixture, excluded from migrations and production frontend data.
-Use `http://localhost:5000/?year=2099` after seeding. A contest needs a precreated
-rating row for every entry/voter pair: clients update values, never insert rows.
+A contest needs a precreated rating row for every entry/voter pair: clients
+update values, never insert rows.
 
 - Open two separate browser profiles, sign in with approved accounts, and select
   the same contest. Edit different cells simultaneously; both browsers must show
@@ -253,11 +249,31 @@ rating row for every entry/voter pair: clients update values, never insert rows.
 - Revoke editor approval as owner, then return to the tab or refresh permissions.
   Cells become read-only, retaining unsaved drafts for review/discard. Even before
   the UI refreshes, RLS must deny revoked writes. Check anonymous/unapproved views.
-- Empty tables must show **Brak konkursów**; service errors must offer retry and
+- Empty tables must show **Brak Eurowizji**; service errors must offer retry and
   retain any previously confirmed table. Repeated year switches or reconnects
   must not accumulate active channels.
 
 Automated browser checks use controlled service responses, independently of
 `.env.local`; they do not modify the configured database or prove server RLS.
 Real two-browser convergence, persisted writes and database SQL tests still need
-the manual checks above. Imports, backups and deployment remain unstarted.
+the manual checks above. Publication (TASK-006) remains unstarted; application
+backup/restore is not planned.
+
+## Resolve podium ties
+
+Apply [20261107000500_podium_ties.sql](supabase/migrations/20261107000500_podium_ties.sql)
+after the earlier core migrations before using this version with Supabase.
+Approved editors can click **Remis** beside a tied podium, reorder countries with
+up/down buttons, then **Zapisz kolejność** or **Przywróć wspólne miejsca**.
+Choices are shared, independent per year/person/total, and only apply to the exact
+tied countries and score. Table medals follow the choice; scores stay unchanged.
+
+The [SQL permission tests](supabase/tests/podium-ties.test.sql) require an isolated
+Supabase database. Frontend checks use controlled services and do not prove RLS.
+
+## Year navigation
+
+Year tabs are newest first. Selection uses `?year=YYYY`, supports browser
+back/forward and survives GitHub login. Drafts stay with their original year.
+Historical workbook conversion is a one-off owner operation; data-specific SQL
+is kept outside version control. Schema migrations and SQL tests remain tracked.

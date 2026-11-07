@@ -134,6 +134,28 @@ tbody tr:hover .country, tbody tr:focus-within .country, tbody tr:hover .order {
 .podium-group:first-child { border-left: 0; padding-left: 0; }
 .podium-group:last-child { padding-right: 0; }
 .podium-group h2 { font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+.podium-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 26px; margin-bottom: 4px; }
+.podium-heading h2 { margin-bottom: 0; min-width: 0; overflow-wrap: anywhere; }
+.tie-trigger { display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); padding: 5px; font-size: 10px; transition: color 120ms, background 120ms; }
+.tie-trigger:hover, .tie-trigger:focus-visible { color: var(--color-fn-green); background: var(--hover); }
+.tie-trigger:disabled { opacity: .4; cursor: default; }
+.tie-dialog { width: min(440px, calc(100vw - 24px)); max-height: calc(100svh - 32px); overflow: auto; }
+.tie-score { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.tie-order { list-style: none; padding: 0; margin: 0; }
+.tie-reorder-move { transition: transform 140ms ease; }
+.tie-order li { display: flex; align-items: center; gap: 10px; min-height: 48px; border-bottom: 1px solid var(--line); animation: person-menu-in 120ms ease-out; }
+.tie-order .place { flex: none; background: var(--header); color: var(--muted); }
+.tie-order .place.medal-1, .tie-order .place.medal-2, .tie-order .place.medal-3 { background: var(--medal-bg); color: var(--medal-ink); }
+.tie-country { flex: 1; font-size: 13px; overflow-wrap: anywhere; }
+.tie-move { display: flex; gap: 4px; }
+.tie-move button { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 5px; background: transparent; transition: color 120ms, background 120ms; }
+.tie-move button:hover { color: var(--color-fn-green); background: var(--hover); }
+.tie-move button:disabled { opacity: .25; cursor: default; }
+.tie-reset { border: 0; padding: 0; margin-top: 16px; color: var(--muted); background: transparent; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
+.tie-reset:hover { color: var(--ink); }
+.tie-reset:disabled { opacity: .4; cursor: default; }
+.tie-select { display: grid; gap: 6px; color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+.tie-select select { border: 1px solid var(--line); border-radius: 4px; padding: 8px; color: var(--ink); background: var(--surface); font: inherit; }
 .podium-group ol { list-style: none; padding: 0; margin: 0; }
 .podium-group li { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 11px; }
 .podium-group strong { margin-left: auto; font-family: var(--number-font); font-size: 13px; font-weight: 500; }

@@ -39,7 +39,8 @@ describe('auth lifecycle and permission', () => {
         expect(JSON.stringify(store.state)).not.toContain('private');
         service.isEditor.mockRejectedValue(new Error('secret backend error'));
         const refreshing = store.dispatch('auth/refresh');
-        expect(store.getters.canEdit).toBe(false);
+        expect(store.getters.canEdit).toBe(true);
+        expect(store.getters.canCommit).toBe(false);
         await refreshing;
         expect(store.getters.canEdit).toBe(false);
         expect(store.state.auth.error).toBe('Nie udało się sprawdzić uprawnień.');

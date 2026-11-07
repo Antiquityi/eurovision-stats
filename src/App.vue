@@ -41,11 +41,10 @@ export default {
         </header>
         <p v-if="configured && live.error" class="connection-state" role="alert">{{ live.error }} <button @click="$store.dispatch('contests/return')">Ponów</button></p>
         <p v-else-if="configured && !live.connected && !live.loading" class="connection-state" role="status">Brak połączenia. Wyniki mogą być nieaktualne. <button @click="$store.dispatch('contests/return')">Połącz ponownie</button></p>
-        <p v-else-if="configured && (live.loading || live.stale)" class="connection-state" role="status">Odświeżanie wyników…</p>
         <template v-if="active">
             <ScoreboardTable ref="scoreboard" :key="active.id" />
             <PodiumSummary />
         </template>
-        <p v-else-if="!live.loading && !live.error && (!configured || live.connected)" class="empty-state">Brak konkursów.</p>
+        <p v-else-if="!live.loading && !live.error && (!configured || live.connected)" class="empty-state">Brak Eurowizji.</p>
     </main>
 </template>
