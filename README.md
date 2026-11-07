@@ -112,7 +112,8 @@ project's real database. No migration has been applied by this implementation.
    [entry metadata removal](supabase/migrations/20261106000300_remove_entry_metadata.sql), then
    [realtime publication](supabase/migrations/20261107000100_realtime.sql), then
    [person management](supabase/migrations/20261107000200_manage_voters.sql), then
-   [podium ties](supabase/migrations/20261107000500_podium_ties.sql).
+   [podium ties](supabase/migrations/20261107000500_podium_ties.sql), then
+   [named contests](supabase/migrations/20261108000100_named_contests.sql).
    Each is transactional.
    Apply each once to a fresh project; preserve applied history and make later
    schema corrections with new forward migrations. Never reset a database with
@@ -273,7 +274,10 @@ Supabase database. Frontend checks use controlled services and do not prove RLS.
 
 ## Year navigation
 
-Year tabs are newest first. Selection uses `?year=YYYY`, supports browser
-back/forward and survives GitHub login. Drafts stay with their original year.
+Year tabs are newest first. Named contests can share a year, such as **2026** and
+**2026 ASIA**. The unique database key is `(year, title)`. Selection uses
+`?year=YYYY&contest=UUID`, supports browser back/forward and survives GitHub login.
+Older year-only links still work and prefer the standard Eurowizja contest.
+Drafts stay with their original contest.
 Historical workbook conversion is a one-off owner operation; data-specific SQL
 is kept outside version control. Schema migrations and SQL tests remain tracked.

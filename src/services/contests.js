@@ -24,7 +24,7 @@ export function createContestService(client) {
             }));
         },
         async listContests() {
-            return checked(await client.from('contests').select('id,year,title').order('year', { ascending: false }));
+            return checked(await client.from('contests').select('id,year,title').order('year', { ascending: false }).order('title', { ascending: true }));
         },
         async getContest(id) {
             // A single embedded SELECT supplies a consistent database snapshot.

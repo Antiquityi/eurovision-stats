@@ -1,9 +1,11 @@
-export function authRedirectUrl(href, basePath, year) {
+export function authRedirectUrl(href, basePath, year, contestId) {
     const current = new URL(href);
     const target = new URL(basePath, current.origin);
     if (target.origin !== current.origin) throw new Error('Invalid app base');
     const selected = year ?? current.searchParams.get('year');
     if (/^\d{4}$/.test(String(selected))) target.searchParams.set('year', selected);
+    const contest = contestId ?? (year === undefined || String(year) === current.searchParams.get('year') ? current.searchParams.get('contest') : null);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(contest))) target.searchParams.set('contest', contest);
     return target.href;
 }
 

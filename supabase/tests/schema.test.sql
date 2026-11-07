@@ -33,7 +33,8 @@ select throws_ok($$insert into public.ratings (contest_id,entry_id,voter_id) val
 select throws_ok($$insert into public.ratings (contest_id,entry_id,voter_id) values
 ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000041')$$,
 '23503', null, 'cross-contest entry rejected');
-select throws_ok($$insert into public.contests (year,title) values (2098,'duplicate')$$, '23505', null, 'unique years');
+select throws_ok($$insert into public.contests (year,title) values (2098,'Disposable test A')$$, '23505', null, 'unique year and title');
+select lives_ok($$insert into public.contests (year,title) values (2098,'2098 ASIA')$$, 'different named contests may share a year');
 select throws_ok($$insert into public.contests (year,title) values (2100,' ')$$, '23514', null, 'nonempty title');
 select throws_ok($$insert into public.entries (contest_id,"order",country_code,country_name) values
 ('00000000-0000-0000-0000-000000000001',0,'SE','Szwecja')$$, '23514', null, 'positive order');

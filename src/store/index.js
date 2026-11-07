@@ -4,7 +4,7 @@ import { createContestsModule } from './contests.js';
 
 export { cellKey } from './contests.js';
 
-export function createScoreboardStore(contests = [], { editable = false, auth = {}, selectedYear = null, ...live } = {}) {
+export function createScoreboardStore(contests = [], { editable = false, auth = {}, selectedYear = null, selectedContestId = null, ...live } = {}) {
     const copies = structuredClone(contests);
     return createStore({
         state: { preview: copies.length > 0 && !auth.configured, editable: editable && !auth.configured },
@@ -15,7 +15,7 @@ export function createScoreboardStore(contests = [], { editable = false, auth = 
         },
         modules: {
             auth: createAuthModule(auth),
-            contests: createContestsModule(copies, { ...live, selectedYear }),
+            contests: createContestsModule(copies, { ...live, selectedYear, selectedContestId }),
         },
     });
 }

@@ -10,6 +10,11 @@ describe('auth SDK boundary', () => {
         await service.signIn(redirect);
         expect(signInWithOAuth).toHaveBeenCalledWith({ provider: 'github', options: { redirectTo: 'https://example.org/eurovision-stats/?year=2024' } });
         expect(authRedirectUrl('http://localhost:5000/?year=2024', '/', 2025)).toBe('http://localhost:5000/?year=2025');
+        const id = '00000000-0000-0000-0000-000000000001';
+        expect(authRedirectUrl(`http://localhost:5000/?year=2026&contest=${id}&code=secret`, '/'))
+            .toBe(`http://localhost:5000/?year=2026&contest=${id}`);
+        expect(authRedirectUrl(`http://localhost:5000/?year=2026&contest=${id}`, '/', 2025))
+            .toBe('http://localhost:5000/?year=2025');
         expect(() => authRedirectUrl('https://example.org', 'https://other.org/')).toThrow();
     });
     it('reads only own membership and propagates lookup failures', async () => {

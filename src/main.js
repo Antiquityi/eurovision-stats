@@ -12,6 +12,7 @@ import './assets/tailwind.css';
 const store = createScoreboardStore(import.meta.env.DEV && !backend.configured ? createPreviewContests() : [], {
     editable: import.meta.env.DEV && !backend.configured,
     selectedYear: new URL(window.location.href).searchParams.get('year'),
+    selectedContestId: new URL(window.location.href).searchParams.get('contest'),
     service: backend.client ? createContestService(backend.client) : null,
     realtime: backend.client ? createRealtimeService(backend.client) : null,
     auth: { configured: backend.configured, configError: backend.error, service: backend.client ? createAuthService(backend.client) : null, basePath: import.meta.env.BASE_URL },

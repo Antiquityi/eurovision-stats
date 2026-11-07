@@ -5,6 +5,42 @@ test.beforeEach(async ({ page }) => {
     await page.route(/\/src\/services\/supabase\.js(?:\?.*)?$/, route => route.fulfill({ contentType: 'application/javascript', body: "export const backend = { client: null, configured: false, error: '' };" }));
 });
 
+test('named contests in the same year have distinct tabs and survive reload and browser navigation', async ({ page }) => {
+    await page.route(/\/src\/main\.js(?:\?.*)?$/, route => route.fulfill({
+        contentType: 'application/javascript',
+        body: `
+import { createApp } from '/node_modules/.vite/deps/vue.js';
+import App from '/src/App.vue';
+import { createScoreboardStore } from '/src/store/index.js';
+import '/src/assets/tailwind.css';
+const mainId = '11111111-1111-1111-1111-111111111111';
+const asiaId = '22222222-2222-2222-2222-222222222222';
+const contests = [
+    { id: mainId, year: 2026, title: 'Eurowizja 2026', voters: [{ id: 'main-v', name: 'Paweł' }],
+      entries: [{ id: 'main-e', order: 1, countryCode: 'PL', countryName: 'Polska', ratings: { 'main-v': 9 } }] },
+    { id: asiaId, year: 2026, title: '2026 ASIA', voters: [{ id: 'asia-v', name: 'Paweł' }],
+      entries: [{ id: 'asia-e', order: 1, countryCode: 'VN', countryName: 'Wietnam', ratings: { 'asia-v': null } }] }
+];
+const params = new URL(location.href).searchParams;
+const store = createScoreboardStore(contests, { editable: true, selectedYear: params.get('year'), selectedContestId: params.get('contest') });
+createApp(App).use(store).mount('#app');
+`,
+    }));
+    await page.goto('/?year=2026');
+    await expect(page.getByRole('textbox', { name: 'Polska, Paweł', exact: true })).toHaveValue('9');
+    await page.getByRole('button', { name: '2026 ASIA', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Wietnam, Paweł', exact: true })).toHaveValue('');
+    await expect(page).toHaveURL(/contest=22222222-2222-2222-2222-222222222222/);
+    await page.reload();
+    await expect(page.getByRole('button', { name: '2026 ASIA', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('textbox', { name: 'Wietnam, Paweł', exact: true })).toHaveValue('');
+    await page.goBack();
+    await expect(page.getByRole('button', { name: '2026', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('textbox', { name: 'Polska, Paweł', exact: true })).toHaveValue('9');
+    await page.goForward();
+    await expect(page.getByRole('button', { name: '2026 ASIA', exact: true })).toHaveAttribute('aria-current', 'page');
+});
+
 test('editors confirm adding/deleting people and rename inline without changing scores', async ({ page }) => {
     await page.goto('/');
     const original = page.getByRole('textbox', { name: 'Dania, Paweł', exact: true });

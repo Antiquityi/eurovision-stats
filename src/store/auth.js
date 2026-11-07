@@ -75,7 +75,7 @@ export function createAuthModule({ service = null, configured = false, configErr
                 const operation = lifecycle;
                 commit('busy', true);
                 try {
-                    await service.signIn(authRedirectUrl(browser.location.href, basePath, rootState.contests.active?.year));
+                    await service.signIn(authRedirectUrl(browser.location.href, basePath, rootState.contests.active?.year, rootState.contests.active?.id));
                     if (running && operation === lifecycle) commit('busy', false);
                 } catch {
                     if (running && operation === lifecycle) commit('error', 'Nie udało się zalogować przez GitHub.');

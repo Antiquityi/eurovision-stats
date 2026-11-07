@@ -5,7 +5,7 @@ import { podiumTies } from '../domain/ranking.js';
 export const cellKey = (entryId, voterId) => `${entryId}:${voterId}`;
 const newestFirst = contests => [...contests].sort((a, b) => b.year - a.year);
 
-export function createContestsModule(copies, { service = null, realtime = null, selectedYear = null, browser = globalThis.window } = {}) {
+export function createContestsModule(copies, { service = null, realtime = null, selectedYear = null, selectedContestId = null, browser = globalThis.window } = {}) {
     let running = false;
     let generation = 0;
     let lifecycle = 0;
@@ -14,6 +14,10 @@ export function createContestsModule(copies, { service = null, realtime = null, 
     let refresh = null;
     let refreshAgain = false;
     let requestedYear = selectedYear;
+    let requestedId = selectedContestId;
+    const requestedContest = list => list.find(contest => contest.id === requestedId)
+        ?? list.find(contest => String(contest.year) === String(requestedYear) && contest.title === `Eurowizja ${contest.year}`)
+        ?? list.find(contest => String(contest.year) === String(requestedYear)) ?? list[0];
     const queues = new Map();
     const enqueued = new Map();
     const forgetVoter = (state, contest, voterId) => {
@@ -36,7 +40,7 @@ export function createContestsModule(copies, { service = null, realtime = null, 
             const list = newestFirst(copies);
             return {
                 list,
-                active: list.find(contest => String(contest.year) === String(selectedYear)) ?? list[0] ?? null,
+                active: requestedContest(list) ?? null,
                 drafts: {}, versions: {}, cancellations: {}, cells: {}, confirmed: {}, selectedId: null,
                 loading: false, connected: false, stale: Boolean(service), error: '', voterBusy: false,
             };
@@ -225,7 +229,7 @@ export function createContestsModule(copies, { service = null, realtime = null, 
                         if (!current()) return;
                         commit('list', list);
                         const id = list.find(contest => contest.id === state.selectedId)?.id
-                            ?? list.find(contest => String(contest.year) === String(requestedYear))?.id ?? state.list[0]?.id ?? null;
+                            ?? requestedContest(state.list)?.id ?? null;
                         if (id !== state.selectedId) {
                             await dispatch('select', { id, replace: true });
                             return;
@@ -249,8 +253,10 @@ export function createContestsModule(copies, { service = null, realtime = null, 
                 return refresh;
             },
             navigate({ state, dispatch }) {
-                requestedYear = new URL(browser.location.href).searchParams.get('year');
-                const contest = state.list.find(item => String(item.year) === String(requestedYear)) ?? state.list[0];
+                const url = new URL(browser.location.href);
+                requestedYear = url.searchParams.get('year');
+                requestedId = url.searchParams.get('contest');
+                const contest = requestedContest(state.list);
                 if (contest && contest.id !== state.selectedId) return dispatch('select', { id: contest.id, replace: true });
             },
             select({ state, commit, dispatch }, selection) {
@@ -259,9 +265,11 @@ export function createContestsModule(copies, { service = null, realtime = null, 
                 const contest = state.list.find(item => item.id === id);
                 if (id !== null && !contest && !service) return;
                 requestedYear = contest?.year ?? requestedYear;
+                requestedId = id;
                 if (browser?.location && browser?.history && contest) {
                     const url = new URL(browser.location.href);
                     url.searchParams.set('year', contest.year);
+                    url.searchParams.set('contest', contest.id);
                     if (replace || url.search === browser.location.search) browser.history.replaceState(null, '', url);
                     else browser.history.pushState(null, '', url);
                 }
