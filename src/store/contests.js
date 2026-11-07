@@ -1,4 +1,5 @@
 import { parseRating } from '../domain/ratings.js';
+import { normalizeVoterName } from '../domain/voters.js';
 
 export const cellKey = (entryId, voterId) => `${entryId}:${voterId}`;
 
@@ -12,6 +13,15 @@ export function createContestsModule(copies, { service = null, realtime = null, 
     let refreshAgain = false;
     const queues = new Map();
     const enqueued = new Map();
+    const forgetVoter = (state, contest, voterId) => {
+        for (const entry of contest.entries) {
+            const key = cellKey(entry.id, voterId);
+            state.cancellations[key] = (state.cancellations[key] ?? 0) + 1;
+            delete state.drafts[key];
+            delete state.cells[key];
+            delete state.confirmed[key];
+        }
+    };
     const apply = (state, row) => {
         if (row.contest_id !== state.active?.id) return;
         const entry = state.active.entries.find(entry => entry.id === row.entry_id);
@@ -21,7 +31,7 @@ export function createContestsModule(copies, { service = null, realtime = null, 
         namespaced: true,
         state: () => ({ list: copies, active: copies.find(contest => String(contest.year) === String(selectedYear)) ?? copies[0] ?? null,
             drafts: {}, versions: {}, cancellations: {}, cells: {}, confirmed: {}, selectedId: null,
-            loading: false, connected: false, stale: Boolean(service), error: '' }),
+            loading: false, connected: false, stale: Boolean(service), error: '', voterBusy: false }),
         getters: { entries: state => state.active?.entries ?? [] },
         mutations: {
             list(state, list) { state.list = list; },
@@ -43,6 +53,11 @@ export function createContestsModule(copies, { service = null, realtime = null, 
             error(state, message) { state.error = message; state.stale = true; },
             fresh(state) { state.error = ''; state.stale = !state.connected; },
             snapshot(state, contest) {
+                if (state.active?.id === contest.id) {
+                    for (const voter of state.active.voters) {
+                        if (!contest.voters.some(person => person.id === voter.id)) forgetVoter(state, state.active, voter.id);
+                    }
+                }
                 state.active = contest;
                 for (const row of contest.ratings) {
                     const key = cellKey(row.entry_id, row.voter_id);
@@ -61,8 +76,47 @@ export function createContestsModule(copies, { service = null, realtime = null, 
                 const entry = state.active?.entries.find(row => row.id === entryId);
                 if (entry && Object.hasOwn(entry.ratings, voterId)) entry.ratings[voterId] = value;
             },
+            voterBusy(state, value) { state.voterBusy = value; },
+            previewVoter(state, { action, voterId, name }) {
+                const contest = state.active;
+                if (action === 'add') {
+                    contest.voters.push({ id: voterId, name });
+                    for (const entry of contest.entries) entry.ratings[voterId] = null;
+                } else if (action === 'rename') {
+                    contest.voters.find(voter => voter.id === voterId).name = name;
+                } else {
+                    forgetVoter(state, contest, voterId);
+                    contest.voters = contest.voters.filter(voter => voter.id !== voterId);
+                    for (const entry of contest.entries) delete entry.ratings[voterId];
+                }
+            },
         },
         actions: {
+            async manageVoter({ state, rootState, rootGetters, commit, dispatch }, { action, voterId = null, name = null }) {
+                if (!rootGetters.canCommit || state.voterBusy || !state.active) return false;
+                if (!['add', 'rename', 'delete'].includes(action)) throw new Error('Invalid action');
+                if (action !== 'delete') name = normalizeVoterName(name);
+                if (action !== 'add' && !state.active.voters.some(voter => voter.id === voterId)) return false;
+                const contestId = state.active.id;
+                const operation = lifecycle;
+                commit('voterBusy', true);
+                try {
+                    if (rootState.preview) {
+                        commit('previewVoter', { action, voterId: voterId ?? browser.crypto.randomUUID(), name });
+                    } else {
+                        await service.manageVoter(contestId, { action, voterId, name });
+                        // Finish any older snapshot before fetching the new structure.
+                        if (refresh) await refresh;
+                        if (running && operation === lifecycle && state.active?.id === contestId) await dispatch('refresh');
+                    }
+                    return true;
+                } catch {
+                    if (!rootState.preview && running && operation === lifecycle) void dispatch('auth/refresh', null, { root: true });
+                    throw new Error('Nie udało się zapisać zmiany osoby. Spróbuj ponownie.');
+                } finally {
+                    if (operation === lifecycle) commit('voterBusy', false);
+                }
+            },
             start({ dispatch }) {
                 if (!service || !realtime || running) return;
                 running = true;
@@ -210,6 +264,7 @@ export function createContestsModule(copies, { service = null, realtime = null, 
                 listeners.forEach(remove => remove()); listeners = [];
                 refresh = null;
                 for (const key of Object.keys(state.drafts)) commit('cell', { key, status: 'error' });
+                commit('voterBusy', false);
                 commit('connection', false);
             },
         },

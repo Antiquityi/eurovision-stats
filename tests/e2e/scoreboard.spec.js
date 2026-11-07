@@ -5,6 +5,73 @@ test.beforeEach(async ({ page }) => {
     await page.route(/\/src\/services\/supabase\.js(?:\?.*)?$/, route => route.fulfill({ contentType: 'application/javascript', body: "export const backend = { client: null, configured: false, error: '' };" }));
 });
 
+test('editors confirm adding/deleting people and rename inline without changing scores', async ({ page }) => {
+    await page.goto('/');
+    const original = page.getByRole('textbox', { name: 'Dania, Paweł', exact: true });
+    await expect(original).toHaveValue('8');
+    await page.getByRole('button', { name: 'Opcje osoby: Paweł', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Zmień imię: Paweł', exact: true }).click();
+    const name = page.getByRole('textbox', { name: 'Imię osoby: Paweł', exact: true });
+    await name.fill('Piotr'); await name.press('Enter');
+    await expect(page.getByRole('textbox', { name: 'Dania, Piotr', exact: true })).toHaveValue('8');
+    await expect(page.locator('.podium-group h2').filter({ hasText: 'Piotr' })).toBeVisible();
+    await page.getByRole('button', { name: 'Dodaj osobę', exact: true }).click();
+    let dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText('Dodać nową osobę do tabeli 2025?');
+    await page.screenshot({ path: 'test-results/person-add-dialog.png', animations: 'disabled' });
+    await dialog.getByRole('button', { name: 'Anuluj' }).click();
+    await expect(page.locator('thead th')).toHaveCount(7);
+    await page.getByRole('button', { name: 'Dodaj osobę', exact: true }).click();
+    await dialog.getByLabel('Imię', { exact: true }).fill('Ewa');
+    await dialog.getByRole('button', { name: 'Dodaj osobę', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Dania, Ewa', exact: true })).toHaveValue('');
+    await expect(page.locator('thead th')).toHaveCount(8);
+    await page.getByRole('textbox', { name: 'Dania, Ewa', exact: true }).fill('10');
+    await page.getByRole('textbox', { name: 'Dania, Ewa', exact: true }).press('Enter');
+    await page.getByRole('button', { name: 'Opcje osoby: Ewa', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Usuń osobę: Ewa', exact: true }).click();
+    await expect(dialog).toContainText('wszystkie oceny');
+    await page.screenshot({ path: 'test-results/person-delete-dialog.png', animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('textbox', { name: 'Dania, Ewa', exact: true })).toHaveValue('10');
+    await page.getByRole('button', { name: 'Opcje osoby: Ewa', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Usuń osobę: Ewa', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Usuń osobę', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Dania, Ewa', exact: true })).toHaveCount(0);
+    await expect(page.locator('thead th')).toHaveCount(7);
+    await expect(page.getByRole('textbox', { name: 'Dania, Piotr', exact: true })).toHaveValue('8');
+});
+
+test('person menu stays above the grid and supports keyboard, outside click and mobile', async ({ page }) => {
+    await page.goto('/');
+    const trigger = page.getByRole('button', { name: 'Opcje osoby: Paweł', exact: true });
+    await trigger.click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Zmień imię: Paweł' })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menuitem', { name: 'Usuń osobę: Paweł' })).toBeFocused();
+    await page.screenshot({ path: 'test-results/person-menu-desktop.png', animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await page.locator('h1').click();
+    await expect(menu).toHaveCount(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await trigger.click();
+    await expect(menu).toBeInViewport();
+    await page.screenshot({ path: 'test-results/person-menu-mobile.png', animations: 'disabled' });
+    await page.getByRole('menuitem', { name: 'Zmień imię: Paweł' }).click();
+    await page.getByRole('textbox', { name: 'Imię osoby: Paweł' }).fill('Jan');
+    await page.getByRole('textbox', { name: 'Imię osoby: Paweł' }).press('Escape');
+    await page.getByRole('button', { name: 'Dodaj osobę', exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeInViewport();
+    await page.screenshot({ path: 'test-results/person-add-mobile.png', animations: 'disabled' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('spreadsheet editing, invalid input, navigation, sorting and local years', async ({ page }) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));

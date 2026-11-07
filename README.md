@@ -111,7 +111,8 @@ project's real database. No migration has been applied by this implementation.
    in filename order: [schema](supabase/migrations/20261106000100_schema.sql), then
    [access](supabase/migrations/20261106000200_access.sql), then
    [entry metadata removal](supabase/migrations/20261106000300_remove_entry_metadata.sql), then
-   [realtime publication](supabase/migrations/20261107000100_realtime.sql).
+   [realtime publication](supabase/migrations/20261107000100_realtime.sql), then
+   [person management](supabase/migrations/20261107000200_manage_voters.sql).
    Each is transactional.
    Apply each once to a fresh project; preserve applied history and make later
    schema corrections with new forward migrations. Never reset a database with
@@ -163,6 +164,27 @@ revision/timestamp generation. Scores accept null or exact half points from 0 to
 10; totals/ranks are calculated in the frontend. See
 [Supabase column privileges](https://supabase.com/docs/guides/database/postgres/column-level-security).
 Import RPCs and rating-row creation for whole contests will arrive with TASK-005.
+
+Approved editors can also manage the current year's person columns. Click
+**Dodaj osobę** in the workspace header to confirm adding a blank column. Open
+the **…** menu beside a person's name and choose **Zmień imię** to edit inline;
+Enter or blur saves, Escape cancels. **Usuń osobę** in the same menu opens a
+confirmation before deleting that year's column and all its scores. Other years
+and GitHub editor approvals are unaffected. Names accept 1–80 characters.
+
+Apply `20261107000200_manage_voters.sql` once before using these controls on a
+configured backend. Its allowlist-checked RPC performs each change transactionally,
+creates all blank rating rows for additions, and publishes a contest update so
+other browsers reload the structure. Direct client writes to voters stay denied.
+The addition dialog retains a UUID across retries to prevent duplicate columns
+after an ambiguous network failure. The development-only fixture supports the
+same controls in memory. SQL coverage is in `supabase/tests/voters.test.sql`;
+the migration and SQL tests have not been executed by the agent against a backend.
+
+Person-management follow-up verification (2026-11-07): 54 unit/component/service/
+store tests, 7 controlled Edge checks and production build passed. Browser checks
+cover rename/cancel, add/cancel, delete confirmation and preserved existing scores.
+The known >500 kB JavaScript chunk warning remains.
 
 ## Database verification and manual account checks
 

@@ -29,6 +29,65 @@ async function harness(options = {}) {
 }
 
 describe('live confirmed state and per-cell writes', () => {
+    it('refreshes a successful structural change and removes deleted drafts without disturbing other cells', async () => {
+        const h = await harness();
+        h.service.manageVoter = vi.fn().mockResolvedValue('voter');
+        await h.draft('7');
+        await h.draft('9', 'other');
+        const changed = snapshot();
+        changed.voters = changed.voters.filter(voter => voter.id !== 'voter');
+        changed.entries[0].ratings = { other: null };
+        changed.ratings = [row(null, 1, 'other')];
+        h.service.getContest.mockResolvedValue(changed);
+        expect(await h.store.dispatch('contests/manageVoter', { action: 'delete', voterId: 'voter' })).toBe(true);
+        expect(h.service.manageVoter).toHaveBeenCalledWith('contest', { action: 'delete', voterId: 'voter', name: null });
+        expect(h.store.state.contests.active.voters.map(voter => voter.id)).toEqual(['other']);
+        expect(h.store.state.contests.active.entries[0].ratings).toEqual({ other: null });
+        expect(h.store.state.contests.drafts).toEqual({ 'entry:other': '9' });
+        expect(h.store.state.contests.confirmed['entry:voter']).toBeUndefined();
+        expect(h.store.state.contests.voterBusy).toBe(false);
+        await h.stop();
+    });
+    it('blocks structural calls when offline/unapproved, and retains confirmed data on RPC failure', async () => {
+        const h = await harness();
+        h.service.manageVoter = vi.fn().mockRejectedValue(new Error('private details'));
+        const action = { action: 'rename', voterId: 'voter', name: 'New name' };
+        await expect(h.store.dispatch('contests/manageVoter', action)).rejects.toThrow('Nie udało się zapisać');
+        expect(h.store.state.contests.active.voters[0].name).toBe('Anna');
+        expect(h.store.state.contests.voterBusy).toBe(false);
+        h.store.commit('auth/access', false);
+        expect(await h.store.dispatch('contests/manageVoter', action)).toBe(false);
+        h.store.commit('auth/access', true);
+        await h.store.dispatch('contests/offline');
+        expect(await h.store.dispatch('contests/manageVoter', action)).toBe(false);
+        expect(h.service.manageVoter).toHaveBeenCalledTimes(1);
+        await h.stop();
+    });
+    it('refreshes person changes from another browser through the contest event', async () => {
+        const h = await harness();
+        await h.draft('9', 'other');
+        const changed = snapshot();
+        changed.voters[0].name = 'Renamed remotely';
+        h.service.getContest.mockResolvedValue(changed);
+        h.subscriptions.at(-1).contests();
+        await flushPromises();
+        expect(h.store.state.contests.active.voters[0].name).toBe('Renamed remotely');
+        expect(h.store.state.contests.drafts['entry:other']).toBe('9');
+        await h.stop();
+    });
+    it('adds blank fixture cells for a new person and deletes only that year’s column', async () => {
+        const contest = snapshot();
+        const store = createScoreboardStore([contest, { ...snapshot(), id: 'another', year: 2025 }], { editable: true });
+        expect(await store.dispatch('contests/manageVoter', { action: 'add', name: 'Ewa' })).toBe(true);
+        const voter = store.state.contests.active.voters.at(-1);
+        expect(voter.name).toBe('Ewa');
+        expect(store.state.contests.active.entries[0].ratings[voter.id]).toBeNull();
+        await store.dispatch('contests/manageVoter', { action: 'delete', voterId: voter.id });
+        expect(store.state.contests.active.voters).toHaveLength(2);
+        expect(Object.hasOwn(store.state.contests.active.entries[0].ratings, voter.id)).toBe(false);
+        await store.dispatch('contests/select', 'another');
+        expect(store.state.contests.active.voters).toHaveLength(2);
+    });
     it('subscribes before snapshot; revisions from an in-flight snapshot cannot overwrite events', async () => {
         const pending = deferred();
         const h = await harness({ getContest: vi.fn().mockReturnValue(pending.promise) });

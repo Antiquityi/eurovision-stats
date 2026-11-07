@@ -47,6 +47,11 @@ h1, h2, p { margin: 0; }
 .auth-controls button:hover { background: var(--hover); }
 .auth-controls button:disabled { opacity: .5; cursor: wait; }
 .auth-error { color: var(--error); flex-basis: 100%; text-align: right; }
+.workspace-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; margin-left: auto; min-width: 0; flex-wrap: wrap; }
+.workspace-actions .preview-label, .workspace-actions .auth-controls { margin-left: 0; }
+.add-person { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--ink); font-size: 12px; white-space: nowrap; transition: background 140ms, border-color 140ms; }
+.add-person:hover { background: var(--surface); border-color: var(--muted); }
+.add-person svg { color: var(--muted); }
 .scoreboard { background: var(--surface); border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
 .table-scroll { position: relative; overflow: auto; max-height: max(320px, calc(100svh - 280px)); scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 760px; font-variant-numeric: tabular-nums; text-align: center; }
@@ -55,6 +60,46 @@ tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
 thead th { height: 42px; background: var(--header); color: var(--muted); font-weight: 500; font-size: 12px; position: sticky; top: 0; z-index: 3; white-space: nowrap; }
 thead button { border: 0; background: transparent; padding: 12px 0; width: 100%; text-align: inherit; }
 .sort-indicator { font-size: 11px; opacity: .45; margin-left: 4px; }
+.voter-heading { position: relative; min-width: 106px; }
+.voter-heading .voter-sort { padding: 12px 20px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voter-heading .voter-menu-trigger { position: absolute; right: -8px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: 4px; color: var(--muted); opacity: .55; transition: opacity 140ms, background 140ms; }
+.voter-menu-trigger:hover, .voter-menu-trigger:focus-visible, .is-menu-open .voter-menu-trigger { opacity: 1; background: var(--hover); color: var(--ink); }
+thead th:has(.is-menu-open) { z-index: 8; }
+.voter-menu { position: absolute; top: calc(100% - 2px); right: -8px; width: 184px; padding: 5px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); box-shadow: 0 8px 24px #0005; text-align: left; animation: person-menu-in 120ms ease-out; }
+.voter-menu button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 8px 10px; border: 0; border-radius: 3px; background: transparent; color: var(--ink); font-size: 12px; text-align: left; }
+.voter-menu svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.voter-menu button:hover, .voter-menu button:focus-visible { background: var(--hover); }
+.voter-menu .voter-menu-delete { margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0 0 3px 3px; color: var(--error); }
+.voter-menu-delete svg { color: inherit; }
+.voter-name-input { display: block; width: 100%; min-width: 80px; height: 30px; padding: 0 8px; text-align: center; border: 1px solid var(--color-fn-green); border-radius: 4px; background: var(--surface); color: var(--ink); outline: none; box-shadow: 0 0 0 2px var(--score-high-bg); }
+.voter-feedback { display: block; max-width: 160px; font-size: 10px; white-space: normal; padding: 3px 0; }
+.voter-menu-trigger:disabled, .add-person:disabled, .voter-menu button:disabled { opacity: .4; cursor: default; }
+.person-dialog { width: min(420px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 80px #0006; }
+.person-dialog[open] { animation: person-dialog-in 160ms ease-out; }
+.person-dialog::backdrop { background: #080b10a6; animation: person-backdrop-in 160ms ease-out; }
+.person-dialog-body { padding: 24px; }
+.person-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+.person-dialog h2 { min-width: 0; overflow-wrap: anywhere; font-size: 17px; font-weight: 600; letter-spacing: -.25px; }
+.dialog-close { display: grid; place-items: center; flex: none; width: 28px; height: 28px; margin: -4px -6px -4px 0; padding: 0; border: 0; border-radius: 4px; color: var(--muted); background: transparent; }
+.dialog-close:hover { background: var(--hover); color: var(--ink); }
+.person-dialog p { color: var(--muted); line-height: 1.6; font-size: 13px; margin-bottom: 22px; }
+.person-dialog label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 500; }
+.person-dialog input { width: 100%; height: 40px; padding: 8px 11px; border: 1px solid var(--line); outline: none; border-radius: 5px; background: var(--paper); color: var(--ink); transition: border-color 120ms, box-shadow 120ms; }
+.person-dialog input:focus { border-color: var(--color-fn-green); box-shadow: 0 0 0 2px var(--score-high-bg); }
+.person-dialog input::placeholder { color: var(--muted); opacity: .65; }
+.dialog-field-hint, .dialog-delete-note { display: block; margin-top: 9px; font-size: 11px; color: var(--muted); }
+.dialog-delete-note { margin-top: -10px; }
+.person-dialog p.cell-error { margin: 14px 0 0; color: var(--error); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 24px; border-top: 1px solid var(--line); background: var(--header); border-radius: 0 0 10px 10px; }
+.dialog-actions button { min-height: 34px; padding: 6px 13px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 500; transition: background 120ms; }
+.dialog-actions button:hover { background: var(--hover); color: var(--ink); }
+.dialog-actions button[type='submit'] { border-color: var(--color-fn-green); background: var(--color-fn-green); color: var(--paper); }
+.dialog-actions button[type='submit']:hover { filter: brightness(1.08); }
+.dialog-actions button.delete-person { border-color: var(--error); background: var(--error); color: var(--paper); }
+.dialog-actions button:disabled { opacity: .5; cursor: default; }
+@keyframes person-menu-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes person-dialog-in { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes person-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 [aria-sort='ascending'] .sort-indicator, [aria-sort='descending'] .sort-indicator { opacity: 1; color: var(--color-fn-green); }
 .order { position: sticky; left: 0; width: 48px; min-width: 48px; max-width: 48px; background: var(--surface); color: var(--muted); font-size: 11px; z-index: 2; }
 .country { position: sticky; left: 48px; background: var(--surface); min-width: 200px; width: 24%; text-align: left; z-index: 2; border-right: 1px solid var(--line); }
@@ -84,7 +129,7 @@ thead .country, thead .order { z-index: 4; background: var(--header); }
 .medal-marker { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--medal-bg); color: var(--medal-ink); font-family: var(--number-font); font-size: 11px; font-weight: 700; line-height: 1; }
 tbody .country, tbody .order { transition: background 120ms; }
 tbody tr:hover .country, tbody tr:focus-within .country, tbody tr:hover .order { background: var(--hover); }
-.podiums { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 24px; padding: 0; }
+.podiums { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-top: 24px; padding: 0; }
 .podium-group { min-width: 0; padding: 0 20px; border-left: 1px solid var(--line); }
 .podium-group:first-child { border-left: 0; padding-left: 0; }
 .podium-group:last-child { padding-right: 0; }
@@ -111,6 +156,8 @@ tbody tr:hover .country, tbody tr:focus-within .country, tbody tr:hover .order {
     .year-tabs button { padding: 0 10px; min-width: 48px; }
     .chip-selected::after { left: 10px; right: 10px; bottom: 8px; }
     .preview-label { font-size: 9px; }
+    .workspace-actions { gap: 10px; padding: 6px 0; }
+    .voter-heading .voter-menu-trigger { opacity: .8; }
     .country { min-width: 150px; width: 150px; }
     .country-line { font-size: 12px; gap: 8px; }
     .country-line img { width: 22px; height: 16.5px; }

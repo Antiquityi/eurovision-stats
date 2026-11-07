@@ -1,4 +1,5 @@
 import { parseRating } from '../domain/ratings.js';
+import { normalizeVoterName } from '../domain/voters.js';
 
 const ratingFields = 'contest_id,entry_id,voter_id,value,revision';
 
@@ -9,6 +10,13 @@ function checked({ data, error }) {
 
 export function createContestService(client) {
     return {
+        async manageVoter(contestId, { action, voterId = null, name = null }) {
+            if (!['add', 'rename', 'delete'].includes(action)) throw new Error('Invalid action');
+            return checked(await client.rpc('manage_voter', {
+                p_contest_id: contestId, p_action: action, p_voter_id: voterId,
+                p_name: action === 'delete' ? null : normalizeVoterName(name),
+            }));
+        },
         async listContests() {
             return checked(await client.from('contests').select('id,year,title').order('year', { ascending: false }));
         },

@@ -11,6 +11,18 @@ function sdk(result) {
 }
 
 describe('contest SDK boundary', () => {
+    it('uses the permission-checked RPC for person changes and validates names', async () => {
+        const rpc = vi.fn().mockResolvedValue({ data: 'new-id', error: null });
+        const service = createContestService({ rpc });
+        expect(await service.manageVoter('c', { action: 'add', name: '  Łukasz  ' })).toBe('new-id');
+        expect(rpc).toHaveBeenLastCalledWith('manage_voter', { p_contest_id: 'c', p_action: 'add', p_voter_id: null, p_name: 'Łukasz' });
+        await service.manageVoter('c', { action: 'delete', voterId: 'v' });
+        expect(rpc).toHaveBeenLastCalledWith('manage_voter', { p_contest_id: 'c', p_action: 'delete', p_voter_id: 'v', p_name: null });
+        for (const name of ['', '   ', 'x'.repeat(81), null]) await expect(service.manageVoter('c', { action: 'rename', voterId: 'v', name })).rejects.toThrow();
+        expect(rpc).toHaveBeenCalledTimes(2);
+        rpc.mockResolvedValueOnce({ data: null, error: new Error('denied') });
+        await expect(service.manageVoter('c', { action: 'rename', voterId: 'v', name: 'Anna' })).rejects.toThrow('denied');
+    });
     it('maps public rows to scoreboard entries and orders voters without metadata', async () => {
         const { query, client } = sdk({ data: { id: 'c', year: 2026, title: 'Eurowizja 2026',
             voters: [{ id: 'b', position: 2 }, { id: 'a', position: 1 }],
