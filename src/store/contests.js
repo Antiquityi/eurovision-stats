@@ -1,0 +1,338 @@
+import { parseRating } from '../domain/ratings.js';
+import { normalizeVoterName } from '../domain/voters.js';
+import { podiumTies } from '../domain/ranking.js';
+
+export const cellKey = (entryId, voterId) => `${entryId}:${voterId}`;
+const newestFirst = contests => [...contests].sort((a, b) => b.year - a.year);
+
+export function createContestsModule(copies, { service = null, realtime = null, selectedYear = null, selectedContestId = null, browser = globalThis.window } = {}) {
+    let running = false;
+    let generation = 0;
+    let lifecycle = 0;
+    let dispose = null;
+    let listeners = [];
+    let refresh = null;
+    let refreshAgain = false;
+    let requestedYear = selectedYear;
+    let requestedId = selectedContestId;
+    const requestedContest = list => list.find(contest => contest.id === requestedId)
+        ?? list.find(contest => String(contest.year) === String(requestedYear) && contest.title === `Eurowizja ${contest.year}`)
+        ?? list.find(contest => String(contest.year) === String(requestedYear)) ?? list[0];
+    const queues = new Map();
+    const enqueued = new Map();
+    const forgetVoter = (state, contest, voterId) => {
+        for (const entry of contest.entries) {
+            const key = cellKey(entry.id, voterId);
+            state.cancellations[key] = (state.cancellations[key] ?? 0) + 1;
+            delete state.drafts[key];
+            delete state.cells[key];
+            delete state.confirmed[key];
+        }
+    };
+    const apply = (state, row) => {
+        if (row.contest_id !== state.active?.id) return;
+        const entry = state.active.entries.find(entry => entry.id === row.entry_id);
+        if (entry && Object.hasOwn(entry.ratings, row.voter_id)) entry.ratings[row.voter_id] = row.value;
+    };
+    return {
+        namespaced: true,
+        state: () => {
+            const list = newestFirst(copies);
+            return {
+                list,
+                active: requestedContest(list) ?? null,
+                drafts: {}, versions: {}, cancellations: {}, cells: {}, confirmed: {}, selectedId: null,
+                loading: false, connected: false, stale: Boolean(service), error: '', voterBusy: false,
+            };
+        },
+        getters: { entries: state => state.active?.entries ?? [] },
+        mutations: {
+            list(state, list) { state.list = newestFirst(list); },
+            select(state, id) { state.selectedId = id; state.active = copies.find(contest => contest.id === id) ?? null; },
+            draft(state, { key, text }) {
+                state.drafts[key] = text;
+                state.versions[key] = (state.versions[key] ?? 0) + 1;
+                state.cells[key] = 'draft';
+            },
+            clearDraft(state, key) { delete state.drafts[key]; },
+            cancel(state, key) {
+                delete state.drafts[key];
+                state.cancellations[key] = (state.cancellations[key] ?? 0) + 1;
+                state.cells[key] = '';
+            },
+            cell(state, { key, status }) { state.cells[key] = status; },
+            connection(state, connected) { state.connected = connected; state.stale = true; },
+            loading(state, value) { state.loading = value; },
+            error(state, message) { state.error = message; state.stale = true; },
+            fresh(state) { state.error = ''; state.stale = !state.connected; },
+            snapshot(state, contest) {
+                if (state.active?.id === contest.id) {
+                    for (const voter of state.active.voters) {
+                        if (!contest.voters.some(person => person.id === voter.id)) forgetVoter(state, state.active, voter.id);
+                    }
+                }
+                state.active = contest;
+                for (const row of contest.ratings) {
+                    const key = cellKey(row.entry_id, row.voter_id);
+                    if (!state.confirmed[key] || BigInt(row.revision) > BigInt(state.confirmed[key].revision)) state.confirmed[key] = row;
+                }
+                // Events may arrive while the snapshot is in flight, even before entries exist.
+                Object.values(state.confirmed).forEach(row => apply(state, row));
+            },
+            confirmed(state, row) {
+                const key = cellKey(row.entry_id, row.voter_id);
+                if (state.confirmed[key] && BigInt(row.revision) <= BigInt(state.confirmed[key].revision)) return;
+                state.confirmed[key] = row;
+                apply(state, row);
+            },
+            rating(state, { entryId, voterId, value }) {
+                const entry = state.active?.entries.find(row => row.id === entryId);
+                if (entry && Object.hasOwn(entry.ratings, voterId)) entry.ratings[voterId] = value;
+            },
+            voterBusy(state, value) { state.voterBusy = value; },
+            previewTie(state, { scope, score, entryIds, reset }) {
+                const tie = podiumTies(state.active.entries, scope).find(group => group.score === score);
+                state.active.tieBreaks ??= {};
+                state.active.tieBreaks[scope] ??= {};
+                if (reset) delete state.active.tieBreaks[scope][tie.key];
+                else state.active.tieBreaks[scope][tie.key] = [...entryIds];
+            },
+            previewVoter(state, { action, voterId, name }) {
+                const contest = state.active;
+                if (action === 'add') {
+                    contest.voters.push({ id: voterId, name });
+                    for (const entry of contest.entries) entry.ratings[voterId] = null;
+                } else if (action === 'rename') {
+                    contest.voters.find(voter => voter.id === voterId).name = name;
+                } else {
+                    forgetVoter(state, contest, voterId);
+                    contest.voters = contest.voters.filter(voter => voter.id !== voterId);
+                    for (const entry of contest.entries) delete entry.ratings[voterId];
+                }
+            },
+        },
+        actions: {
+            async resolveTie({ state, rootState, rootGetters, commit, dispatch }, selection) {
+                if (!rootGetters.canCommit || !state.active) throw new Error('Zmiana jest teraz niedostępna.');
+                const { scope, score, entryIds } = selection;
+                if (scope !== 'total' && !state.active.voters.some(voter => voter.id === scope)) throw new Error('Nieznane podium.');
+                const tie = podiumTies(state.active.entries, scope).find(group => group.score === score);
+                if (!tie || !Array.isArray(entryIds) || entryIds.length !== tie.entries.length
+                    || new Set(entryIds).size !== entryIds.length || !tie.entries.every(entry => entryIds.includes(entry.id))) {
+                    throw new Error('Remis się zmienił. Otwórz wybór ponownie.');
+                }
+                const contestId = state.active.id;
+                const operation = lifecycle;
+                if (rootState.preview) {
+                    commit('previewTie', selection);
+                    return;
+                }
+                try {
+                    await service.resolveTie(contestId, selection);
+                    if (refresh) await refresh;
+                    if (running && operation === lifecycle && state.active?.id === contestId) await dispatch('refresh');
+                } catch {
+                    if (running && operation === lifecycle) void dispatch('auth/refresh', null, { root: true });
+                    throw new Error('Nie udało się zapisać kolejności. Odśwież wyniki i spróbuj ponownie.');
+                }
+            },
+            async manageVoter({ state, rootState, rootGetters, commit, dispatch }, { action, voterId = null, name = null }) {
+                if (!rootGetters.canCommit || state.voterBusy || !state.active) return false;
+                if (!['add', 'rename', 'delete'].includes(action)) throw new Error('Invalid action');
+                if (action !== 'delete') name = normalizeVoterName(name);
+                if (action !== 'add' && !state.active.voters.some(voter => voter.id === voterId)) return false;
+                const contestId = state.active.id;
+                const operation = lifecycle;
+                commit('voterBusy', true);
+                try {
+                    if (rootState.preview) {
+                        commit('previewVoter', { action, voterId: voterId ?? browser.crypto.randomUUID(), name });
+                    } else {
+                        await service.manageVoter(contestId, { action, voterId, name });
+                        // Finish any older snapshot before fetching the new structure.
+                        if (refresh) await refresh;
+                        if (running && operation === lifecycle && state.active?.id === contestId) await dispatch('refresh');
+                    }
+                    return true;
+                } catch {
+                    if (!rootState.preview && running && operation === lifecycle) void dispatch('auth/refresh', null, { root: true });
+                    throw new Error('Nie udało się zapisać zmiany osoby. Spróbuj ponownie.');
+                } finally {
+                    if (operation === lifecycle) commit('voterBusy', false);
+                }
+            },
+            start({ dispatch }) {
+                if (running) return;
+                running = true;
+                ++lifecycle;
+                const listen = (target, name, callback) => {
+                    target.addEventListener(name, callback);
+                    listeners.push(() => target.removeEventListener(name, callback));
+                };
+                listen(browser, 'popstate', () => dispatch('navigate'));
+                if (!service || !realtime) return;
+                listen(browser, 'offline', () => dispatch('offline'));
+                listen(browser, 'online', () => dispatch('connect'));
+                const onReturn = () => {
+                    if (browser.document.visibilityState === 'visible') void dispatch('return');
+                };
+                listen(browser, 'focus', onReturn);
+                listen(browser.document, 'visibilitychange', onReturn);
+                return dispatch('connect');
+            },
+            offline({ commit }) { commit('connection', false); },
+            return({ state, dispatch }) {
+                if (state.connected) return dispatch('refresh');
+                return dispatch('connect');
+            },
+            connect({ state, commit, dispatch }) {
+                if (!running) return;
+                dispose?.();
+                dispose = null;
+                const request = ++generation;
+                refresh = null;
+                refreshAgain = false;
+                commit('connection', false);
+                commit('loading', !state.active);
+                if (browser?.navigator?.onLine === false) { commit('loading', false); return; }
+                dispose = realtime.subscribe(state.selectedId, {
+                    rating: row => { if (running && request === generation) commit('confirmed', row); },
+                    contests: () => {
+                        if (!running || request !== generation) return;
+                        if (refresh) refreshAgain = true;
+                        else void dispatch('refresh');
+                    },
+                    status: status => {
+                        if (!running || request !== generation) return;
+                        if (status === 'SUBSCRIBED') {
+                            if (browser?.navigator?.onLine === false) return;
+                            commit('connection', true);
+                            void dispatch('refresh');
+                        } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
+                            commit('connection', false);
+                            commit('loading', false);
+                        }
+                    },
+                });
+            },
+            refresh({ state, commit, dispatch }) {
+                if (!running || !state.connected) return;
+                if (refresh) return refresh;
+                const request = generation;
+                const current = () => running && request === generation;
+                commit('loading', true);
+                // Recheck membership without replacing the confirmed role or moving editor controls.
+                const membership = dispatch('auth/refresh', null, { root: true });
+                refresh = (async () => {
+                    try {
+                        const list = await service.listContests();
+                        if (!current()) return;
+                        commit('list', list);
+                        const id = list.find(contest => contest.id === state.selectedId)?.id
+                            ?? requestedContest(state.list)?.id ?? null;
+                        if (id !== state.selectedId) {
+                            await dispatch('select', { id, replace: true });
+                            return;
+                        }
+                        if (id) {
+                            const contest = await service.getContest(id);
+                            if (!current()) return;
+                            commit('snapshot', contest);
+                        }
+                        await membership;
+                        if (current()) commit('fresh');
+                    } catch {
+                        if (current()) commit('error', 'Nie udało się odświeżyć wyników. Spróbuj ponownie.');
+                    } finally {
+                        if (current()) {
+                            commit('loading', false); refresh = null;
+                            if (refreshAgain) { refreshAgain = false; void dispatch('refresh'); }
+                        }
+                    }
+                })();
+                return refresh;
+            },
+            navigate({ state, dispatch }) {
+                const url = new URL(browser.location.href);
+                requestedYear = url.searchParams.get('year');
+                requestedId = url.searchParams.get('contest');
+                const contest = requestedContest(state.list);
+                if (contest && contest.id !== state.selectedId) return dispatch('select', { id: contest.id, replace: true });
+            },
+            select({ state, commit, dispatch }, selection) {
+                const { id, replace = false } = typeof selection === 'object' && selection !== null ? selection : { id: selection };
+                if (id === state.selectedId) return;
+                const contest = state.list.find(item => item.id === id);
+                if (id !== null && !contest && !service) return;
+                requestedYear = contest?.year ?? requestedYear;
+                requestedId = id;
+                if (browser?.location && browser?.history && contest) {
+                    const url = new URL(browser.location.href);
+                    url.searchParams.set('year', contest.year);
+                    url.searchParams.set('contest', contest.id);
+                    if (replace || url.search === browser.location.search) browser.history.replaceState(null, '', url);
+                    else browser.history.pushState(null, '', url);
+                }
+                commit('select', id);
+                if (service) return dispatch('connect');
+            },
+            draft({ rootGetters, commit }, { entryId, voterId, text }) {
+                if (rootGetters.canEdit) commit('draft', { key: cellKey(entryId, voterId), text });
+            },
+            cancel({ commit }, key) { commit('cancel', key); },
+            save({ state, rootState, rootGetters, commit, dispatch }, { entryId, voterId, retry = false }) {
+                const key = cellKey(entryId, voterId);
+                if (!Object.hasOwn(state.drafts, key)) return;
+                const version = state.versions[key];
+                if (enqueued.get(key) === version && queues.has(key)) return queues.get(key);
+                if (enqueued.get(key) === version && !retry) return queues.get(key);
+                if (!rootGetters.canCommit) { commit('cell', { key, status: 'error' }); return; }
+                const value = parseRating(state.drafts[key]);
+                if (rootState.preview) {
+                    commit('rating', { entryId, voterId, value });
+                    commit('clearDraft', key);
+                    return;
+                }
+                const cancellation = state.cancellations[key];
+                const contestId = state.active?.id;
+                const operation = lifecycle;
+                const current = () => running && operation === lifecycle;
+                const job = async () => {
+                    if (state.cancellations[key] !== cancellation) return;
+                    const matches = () => state.versions[key] === version && state.cancellations[key] === cancellation;
+                    try {
+                        if (!current() || !rootGetters.canCommit) throw new Error('Unavailable');
+                        if (matches()) commit('cell', { key, status: 'saving' });
+                        const row = await service.saveRating(entryId, voterId, value);
+                        if (!current()) return;
+                        if (row.contest_id !== contestId || row.entry_id !== entryId || row.voter_id !== voterId) throw new Error('Unexpected rating');
+                        commit('confirmed', row);
+                        if (matches()) {
+                            commit('clearDraft', key);
+                            commit('cell', { key, status: 'saved' });
+                        }
+                    } catch {
+                        if (current() && matches()) commit('cell', { key, status: 'error' });
+                        if (current()) void dispatch('auth/refresh', null, { root: true });
+                    }
+                };
+                enqueued.set(key, version);
+                const pending = (queues.get(key) ?? Promise.resolve()).then(job);
+                queues.set(key, pending);
+                void pending.finally(() => { if (queues.get(key) === pending) queues.delete(key); });
+                return pending;
+            },
+            stop({ state, commit }) {
+                running = false;
+                ++lifecycle;
+                ++generation;
+                dispose?.(); dispose = null;
+                listeners.forEach(remove => remove()); listeners = [];
+                refresh = null;
+                for (const key of Object.keys(state.drafts)) commit('cell', { key, status: 'error' });
+                commit('voterBusy', false);
+                commit('connection', false);
+            },
+        },
+    };
+}

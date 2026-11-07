@@ -1,0 +1,33 @@
+# Local agent instructions and working documentation
+/.agents/
+/.codex/
+/.aws/
+/AGENTS.md
+/docs/
+
+# Dependencies and build output
+node_modules/
+.npm-cache/
+dist/
+coverage/
+.vite/
+playwright-report/
+test-results/
+supabase/.temp/
+supabase/.branches/
+
+# One-off local data scripts; keep schema migrations and SQL tests tracked
+/supabase/reset-development.sql
+/supabase/manual/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.local
+
+# Logs and operating system files
+*.log
+.DS_Store
+Thumbs.db
