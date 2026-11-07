@@ -1,0 +1,62 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createContestService } from '../../../src/services/contests.js';
+import { createRealtimeService } from '../../../src/services/realtime.js';
+
+function sdk(result) {
+    const query = {};
+    for (const method of ['select', 'eq', 'update', 'order']) query[method] = vi.fn(() => query);
+    query.single = vi.fn().mockResolvedValue(result);
+    query.then = (resolve, reject) => Promise.resolve(result).then(resolve, reject);
+    return { query, client: { from: vi.fn(() => query) } };
+}
+
+describe('contest SDK boundary', () => {
+    it('maps public rows to scoreboard entries and orders voters without metadata', async () => {
+        const { query, client } = sdk({ data: { id: 'c', year: 2026, title: 'Eurowizja 2026',
+            voters: [{ id: 'b', position: 2 }, { id: 'a', position: 1 }],
+            entries: [{ id: 'e', order: 1, country_code: 'PL', country_name: 'Polska' }], ratings: [] }, error: null });
+        const contest = await createContestService(client).getContest('c');
+        expect(query.eq).toHaveBeenCalledWith('id', 'c');
+        expect(contest.voters.map(voter => voter.id)).toEqual(['a', 'b']);
+        expect(contest.entries).toEqual([{ id: 'e', order: 1, countryCode: 'PL', countryName: 'Polska', ratings: { a: null, b: null } }]);
+        expect(query.select.mock.calls[0][0]).not.toMatch(/artist|song/);
+    });
+    it('updates only one pair and value, returning the authoritative revision; rejects invalid inputs', async () => {
+        const result = { entry_id: 'e', voter_id: 'v', value: 0, revision: 9 };
+        const { query, client } = sdk({ data: result, error: null });
+        const service = createContestService(client);
+        expect(await service.saveRating('e', 'v', 0)).toEqual(result);
+        expect(query.update).toHaveBeenCalledExactlyOnceWith({ value: 0 });
+        expect(query.eq.mock.calls).toEqual([['entry_id', 'e'], ['voter_id', 'v']]);
+        await expect(service.saveRating('e', 'v', 7.2)).rejects.toThrow();
+        expect(query.update).toHaveBeenCalledTimes(1);
+        await service.saveRating('e', 'v', null);
+        expect(query.update).toHaveBeenLastCalledWith({ value: null });
+    });
+    it('propagates empty-row/RLS/service errors instead of acknowledging an unsaved value', async () => {
+        const { client } = sdk({ data: null, error: new Error('denied') });
+        const service = createContestService(client);
+        await expect(service.saveRating('e', 'v', 7)).rejects.toThrow('denied');
+        await expect(service.getContest('c')).rejects.toThrow('denied');
+        await expect(service.listContests()).rejects.toThrow('denied');
+    });
+});
+
+it('scopes rating events to the active contest and disposes only its channel', () => {
+    const handlers = [];
+    let notify;
+    const channel = { on: vi.fn((kind, config, callback) => { handlers.push({ kind, config, callback }); return channel; }),
+        subscribe: vi.fn(callback => { notify = callback; }) };
+    const client = { channel: vi.fn(() => channel), removeChannel: vi.fn() };
+    const callbacks = { rating: vi.fn(), contests: vi.fn(), status: vi.fn() };
+    const stop = createRealtimeService(client).subscribe('c', callbacks);
+    expect(handlers.slice(0, 2).map(handler => handler.config)).toEqual(['INSERT', 'UPDATE'].map(event => ({ event, schema: 'public', table: 'ratings', filter: 'contest_id=eq.c' })));
+    handlers[0].callback({ new: { revision: 3 } }); notify('SUBSCRIBED');
+    expect(callbacks.rating).toHaveBeenCalledWith({ revision: 3 });
+    expect(callbacks.status).toHaveBeenCalledWith('SUBSCRIBED');
+    stop();
+    handlers[1].callback({ new: { revision: 4 } }); notify('CLOSED');
+    expect(callbacks.rating).toHaveBeenCalledTimes(1);
+    expect(callbacks.status).toHaveBeenCalledTimes(1);
+    expect(client.removeChannel).toHaveBeenCalledWith(channel);
+});

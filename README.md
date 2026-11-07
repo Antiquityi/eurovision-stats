@@ -2,8 +2,9 @@
 
 Polish spreadsheet interface built with Vue 3 Options API, Vuex, Vite and
 Tailwind CSS. TASK-001 and TASK-002 are accepted. TASK-003 adds the Supabase schema,
-database permissions and GitHub account controls; real OAuth/SQL verification is
-pending project setup. Score loading, persisted editing and realtime are TASK-004.
+database permissions and GitHub account controls; the user verified real login
+and approval locally. TASK-004 implements real score loading, per-cell saving,
+revision-based realtime updates and reconnect recovery; user accepted local behavior.
 Imports, backups and GitHub Pages deployment remain later tasks.
 
 ## Run locally
@@ -25,8 +26,9 @@ Eurovision results. Edits live in browser memory and reset on reload. No databas
 account or environment configuration is needed to test the frontend.
 
 Production builds exclude the fixtures. Configuring either Supabase environment
-setting also disables the development demo, so the configured app shows account
-controls and an empty workspace until TASK-004 adds scoreboard loading/saving.
+setting also disables the development demo. The configured app loads public
+scoreboards and permits approved editors to save ratings. An empty database shows
+an empty workspace; connection failures show an explicit stale/error state.
 Partial or invalid configuration shows a connection error and disables login.
 The local demo's editable flag grants no database permission.
 
@@ -71,11 +73,13 @@ tabular figures. Filled gold/silver/bronze circles mark places inside the spread
 the podium lists use smaller, muted square rank labels.
 No external font request is required.
 
-Verified on 2026-11-06 for TASK-003: 31 Vitest domain/component/service/auth-store
-tests, 2 actual Edge spreadsheet browser tests and production build. The build
-reports a JavaScript chunk above 500 kB with the Supabase SDK included. SQL tests
-and actual GitHub login remain unrun: no Supabase project/provider is configured.
-Mocked SDK tests verify application handling, not actual OAuth or database access.
+Verified on 2026-11-07 for TASK-004: 46 Vitest domain/component/service/store
+tests, 5 actual Edge browser checks and production build. The build
+reports a JavaScript chunk above 500 kB with the Supabase SDK included. The user
+verified actual GitHub login and account approval for TASK-003 and reported that
+TASK-004 works. SQL tests and detailed real multi-browser/reconnect verification
+remain unconfirmed. Mocked SDK/browser services verify application
+handling, not actual OAuth, server permissions or database persistence.
 
 For a future repository-base build:
 
@@ -106,7 +110,8 @@ project's real database. No migration has been applied by this implementation.
 2. In the development project's SQL Editor, execute the tracked migrations
    in filename order: [schema](supabase/migrations/20261106000100_schema.sql), then
    [access](supabase/migrations/20261106000200_access.sql), then
-   [entry metadata removal](supabase/migrations/20261106000300_remove_entry_metadata.sql).
+   [entry metadata removal](supabase/migrations/20261106000300_remove_entry_metadata.sql), then
+   [realtime publication](supabase/migrations/20261107000100_realtime.sql).
    Each is transactional.
    Apply each once to a fresh project; preserve applied history and make later
    schema corrections with new forward migrations. Never reset a database with
@@ -194,5 +199,43 @@ After configuring the hosted dev project, manually verify:
 - Run the SQL access tests in isolation before relying on client write access.
   UI labels and mocked tests cannot prove server authorization.
 
-TASK-003 stops at schema/auth. A configured empty workspace is expected here;
-real contest reads, score saves and multi-browser realtime testing are TASK-004.
+## Test live voting (TASK-004)
+
+Apply the new realtime migration to your development project after the earlier
+migrations. It adds only `contests` and `ratings` to `supabase_realtime`, preserving
+all rows and existing policies. This follows [Supabase Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes).
+No migration or seed has been applied remotely by the agent.
+
+Until imports arrive in TASK-005, the owner can run
+[task-004-demo.sql](supabase/manual/task-004-demo.sql) in a **disposable development
+project** to create a synthetic 2099 tab with three countries, two voters and six
+blank ratings. It aborts if that year exists and never replaces scores. It is an
+optional manual fixture, excluded from migrations and production frontend data.
+Use `http://localhost:5000/?year=2099` after seeding. A contest needs a precreated
+rating row for every entry/voter pair: clients update values, never insert rows.
+
+- Open two separate browser profiles, sign in with approved accounts, and select
+  the same contest. Edit different cells simultaneously; both browsers must show
+  both changes and preserve them on reload.
+- Edit the same cell in both profiles. Both must converge to the last
+  database-committed write. Totals/podiums use confirmed values only; local drafts
+  stay visible until saved or cancelled, even when another browser edits the cell.
+- Type rapidly and press Enter, then blur. Each cell serializes its requests;
+  a delayed response must not replace a newer draft. Escape cancels unsent input.
+  A request already sent may still commit. Clearing saves null; 0 and 0.5 save
+  real scores. Saving, saved and failed states have accessible text.
+- Disconnect and try an edit. The last table stays visible with a stale/offline
+  message. Commits are blocked; unsaved input stays in memory. Reconnect or return
+  to the tab, wait for data/membership refresh, then use **Ponów** for failed
+  cells. Drafts are not automatically resent and are lost on a full page reload.
+- Revoke editor approval as owner, then return to the tab or refresh permissions.
+  Cells become read-only, retaining unsaved drafts for review/discard. Even before
+  the UI refreshes, RLS must deny revoked writes. Check anonymous/unapproved views.
+- Empty tables must show **Brak konkursów**; service errors must offer retry and
+  retain any previously confirmed table. Repeated year switches or reconnects
+  must not accumulate active channels.
+
+Automated browser checks use controlled service responses, independently of
+`.env.local`; they do not modify the configured database or prove server RLS.
+Real two-browser convergence, persisted writes and database SQL tests still need
+the manual checks above. Imports, backups and deployment remain unstarted.

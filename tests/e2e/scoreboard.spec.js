@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
 
+// Keep fixture checks independent of ignored local Supabase configuration.
+test.beforeEach(async ({ page }) => {
+    await page.route(/\/src\/services\/supabase\.js(?:\?.*)?$/, route => route.fulfill({ contentType: 'application/javascript', body: "export const backend = { client: null, configured: false, error: '' };" }));
+});
+
 test('spreadsheet editing, invalid input, navigation, sorting and local years', async ({ page }) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));

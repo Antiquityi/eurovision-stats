@@ -1,0 +1,183 @@
+import { describe, expect, it, vi } from 'vitest';
+import { flushPromises } from '@vue/test-utils';
+import { createScoreboardStore } from '../../../src/store/index.js';
+
+const deferred = () => {
+    let resolve, reject;
+    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+    return { promise, resolve, reject };
+};
+const summary = { id: 'contest', year: 2026, title: 'Eurowizja 2026' };
+const row = (value, revision = 1, voterId = 'voter') => ({ contest_id: 'contest', entry_id: 'entry', voter_id: voterId, value, revision });
+const snapshot = () => ({ ...summary, voters: [{ id: 'voter', name: 'Anna' }, { id: 'other', name: 'Jan' }],
+    entries: [{ id: 'entry', countryName: 'Polska', countryCode: 'PL', order: 1, ratings: { voter: null, other: null } }], ratings: [row(1), row(null, 1, 'other')] });
+
+async function harness(options = {}) {
+    const subscriptions = [];
+    const service = { listContests: vi.fn().mockResolvedValue([summary]), getContest: vi.fn().mockImplementation(async () => snapshot()), saveRating: vi.fn(), ...options };
+    const realtime = { subscribe: vi.fn((id, callbacks) => { const stop = vi.fn(); subscriptions.push({ id, ...callbacks, stop }); return stop; }) };
+    const store = createScoreboardStore([], { auth: { configured: true }, service, realtime });
+    await store.dispatch('contests/start');
+    subscriptions.at(-1).status('SUBSCRIBED');
+    await flushPromises();
+    if (subscriptions.length > 1) { subscriptions.at(-1).status('SUBSCRIBED'); await flushPromises(); }
+    store.commit('auth/access', true);
+    const draft = (text, voterId = 'voter') => store.dispatch('contests/draft', { entryId: 'entry', voterId, text });
+    const save = (voterId = 'voter', retry = false) => store.dispatch('contests/save', { entryId: 'entry', voterId, retry });
+    const value = () => store.state.contests.active.entries[0].ratings.voter;
+    return { store, service, subscriptions, draft, save, value, stop: () => store.dispatch('contests/stop') };
+}
+
+describe('live confirmed state and per-cell writes', () => {
+    it('subscribes before snapshot; revisions from an in-flight snapshot cannot overwrite events', async () => {
+        const pending = deferred();
+        const h = await harness({ getContest: vi.fn().mockReturnValue(pending.promise) });
+        expect(h.service.getContest).toHaveBeenCalledTimes(1);
+        h.subscriptions.at(-1).rating(row(9, 4));
+        pending.resolve(snapshot());
+        await flushPromises();
+        expect(h.value()).toBe(9);
+        h.subscriptions.at(-1).rating(row(2, 3));
+        expect(h.value()).toBe(9);
+        await h.stop();
+    });
+    it('serializes one cell, keeps different cells independent and preserves newer drafts', async () => {
+        const first = deferred(), second = deferred(), other = deferred();
+        const h = await harness();
+        h.service.saveRating.mockReturnValueOnce(first.promise).mockReturnValueOnce(other.promise).mockReturnValueOnce(second.promise);
+        await h.draft('7'); const a = h.save();
+        await h.draft('8'); const b = h.save();
+        await h.draft('0', 'other'); const c = h.save('other');
+        await flushPromises();
+        expect(h.service.saveRating).toHaveBeenCalledTimes(2);
+        expect(h.value()).toBe(1);
+        first.resolve(row(7, 2)); await a; await flushPromises();
+        expect(h.store.state.contests.drafts['entry:voter']).toBe('8');
+        expect(h.service.saveRating).toHaveBeenNthCalledWith(3, 'entry', 'voter', 8);
+        h.subscriptions.at(-1).rating(row(10, 5));
+        second.resolve(row(8, 3)); other.resolve(row(0, 2, 'other'));
+        await Promise.all([b, c]);
+        expect(h.value()).toBe(10);
+        expect(h.store.state.contests.active.entries[0].ratings.other).toBe(0);
+        expect(h.store.state.contests.drafts).toEqual({});
+        await h.stop();
+    });
+    it('retains failed drafts, deduplicates Enter/blur and retries null explicitly', async () => {
+        const fail = deferred();
+        const h = await harness();
+        h.service.saveRating.mockReturnValueOnce(fail.promise).mockResolvedValueOnce(row(null, 2));
+        await h.draft(''); const a = h.save(); const duplicate = h.save();
+        await flushPromises();
+        expect(h.service.saveRating).toHaveBeenCalledTimes(1);
+        fail.reject(new Error('network')); await Promise.all([a, duplicate]);
+        expect(h.value()).toBe(1);
+        expect(h.store.state.contests.cells['entry:voter']).toBe('error');
+        expect(h.store.state.contests.drafts['entry:voter']).toBe('');
+        await h.save(); expect(h.service.saveRating).toHaveBeenCalledTimes(1);
+        await h.save('voter', true);
+        expect(h.value()).toBeNull();
+        expect(h.store.state.contests.cells['entry:voter']).toBe('saved');
+        await h.stop();
+    });
+    it('blocks visitors, offline commits and queued writes after revocation without losing drafts', async () => {
+        const h = await harness();
+        await h.draft('9');
+        h.subscriptions.at(-1).status('CHANNEL_ERROR');
+        await h.save();
+        expect(h.service.saveRating).not.toHaveBeenCalled();
+        expect(h.store.state.contests.drafts['entry:voter']).toBe('9');
+        h.subscriptions.at(-1).status('SUBSCRIBED'); await flushPromises();
+        expect(h.store.state.contests.drafts['entry:voter']).toBe('9');
+        h.store.commit('auth/access', false);
+        await h.save('voter', true); await h.draft('8');
+        expect(h.service.saveRating).not.toHaveBeenCalled();
+        expect(h.store.state.contests.drafts['entry:voter']).toBe('9');
+        await h.stop();
+    });
+    it('cleans up channels/listeners, ignores obsolete callbacks and preserves drafts on refresh errors', async () => {
+        const h = await harness();
+        await h.draft('7,5');
+        h.service.getContest.mockRejectedValueOnce(new Error('service'));
+        await h.store.dispatch('contests/refresh');
+        expect(h.store.state.contests.stale).toBe(true);
+        expect(h.value()).toBe(1);
+        expect(h.store.state.contests.drafts['entry:voter']).toBe('7,5');
+        const obsolete = h.subscriptions.at(-1);
+        await h.store.dispatch('contests/connect');
+        expect(obsolete.stop).toHaveBeenCalledOnce();
+        obsolete.rating(row(10, 20)); expect(h.value()).toBe(1);
+        await h.stop();
+        expect(h.subscriptions.every(subscription => subscription.stop.mock.calls.length === 1)).toBe(true);
+        const count = h.subscriptions.length;
+        window.dispatchEvent(new Event('online'));
+        expect(h.subscriptions).toHaveLength(count);
+    });
+    it('cancels a queued edit and does not let an old response erase a fresh same-text draft', async () => {
+        const pending = deferred();
+        const h = await harness();
+        h.service.saveRating.mockReturnValueOnce(pending.promise);
+        await h.draft('7'); const a = h.save(); await flushPromises();
+        await h.draft('8'); const b = h.save();
+        await h.store.dispatch('contests/cancel', 'entry:voter');
+        await h.draft('7');
+        pending.resolve(row(7, 2)); await Promise.all([a, b]);
+        expect(h.service.saveRating).toHaveBeenCalledTimes(1);
+        expect(h.store.state.contests.drafts['entry:voter']).toBe('7');
+        await h.stop();
+    });
+    it('blocks a queued network write if editor approval is lost after the first request', async () => {
+        const pending = deferred();
+        const h = await harness();
+        h.service.saveRating.mockReturnValueOnce(pending.promise);
+        await h.draft('7'); const a = h.save(); await flushPromises();
+        await h.draft('8'); const b = h.save();
+        h.store.commit('auth/access', false);
+        pending.resolve(row(7, 2)); await Promise.all([a, b]);
+        expect(h.service.saveRating).toHaveBeenCalledTimes(1);
+        expect(h.value()).toBe(7);
+        expect(h.store.state.contests.drafts['entry:voter']).toBe('8');
+        expect(h.store.state.contests.cells['entry:voter']).toBe('error');
+        await h.stop();
+    });
+    it('keeps different contests isolated and ignores a snapshot from a previous selection', async () => {
+        const pending = deferred();
+        const h = await harness();
+        h.service.getContest.mockReturnValueOnce(pending.promise);
+        const oldRefresh = h.store.dispatch('contests/refresh');
+        await flushPromises();
+        await h.draft('9');
+        await h.store.dispatch('contests/select', 'another');
+        const different = { ...snapshot(), id: 'another', entries: [{ ...snapshot().entries[0], id: 'different', ratings: { voter: null, other: null } }], ratings: [] };
+        h.service.listContests.mockResolvedValue([{ ...summary, id: 'another' }]);
+        h.service.getContest.mockResolvedValue(different);
+        h.subscriptions.at(-1).status('SUBSCRIBED'); await flushPromises();
+        pending.resolve(snapshot()); await oldRefresh;
+        expect(h.store.state.contests.active.id).toBe('another');
+        expect(h.store.state.contests.active.entries[0].ratings.voter).toBeNull();
+        expect(h.store.state.contests.drafts['entry:voter']).toBe('9');
+        await h.stop();
+    });
+    it('treats an empty backend truthfully and refreshes summaries on contest events', async () => {
+        const h = await harness({ listContests: vi.fn().mockResolvedValue([]) });
+        expect(h.store.state.contests.list).toEqual([]);
+        expect(h.store.state.contests.active).toBeNull();
+        expect(h.store.state.contests.error).toBe('');
+        h.service.listContests.mockResolvedValue([summary]);
+        h.subscriptions.at(-1).contests(); await flushPromises();
+        expect(h.subscriptions.at(-1).id).toBe('contest');
+        h.subscriptions.at(-1).status('SUBSCRIBED'); await flushPromises();
+        expect(h.value()).toBe(1);
+        await h.stop();
+    });
+    it('rechecks membership and confirmed rows on tab return while retaining an uncommitted draft', async () => {
+        const h = await harness();
+        const membership = vi.spyOn(h.store, 'dispatch');
+        await h.draft('8');
+        h.service.getContest.mockResolvedValue({ ...snapshot(), ratings: [row(9, 5)] });
+        window.dispatchEvent(new Event('focus')); await flushPromises();
+        expect(membership).toHaveBeenCalledWith('auth/refresh', null);
+        expect(h.value()).toBe(9);
+        expect(h.store.state.contests.drafts['entry:voter']).toBe('8');
+        await h.stop();
+    });
+});

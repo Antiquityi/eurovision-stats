@@ -14,6 +14,9 @@ export default {
         key() { return cellKey(this.entry.id, this.voter.id); },
         draft() { return this.$store.state.contests.drafts[this.key]; },
         editable() { return this.$store.getters.canEdit; },
+        canCommit() { return this.$store.getters.canCommit; },
+        status() { return this.$store.state.contests.cells[this.key]; },
+        statusText() { return { saving: 'Zapisywanie…', error: 'Nie zapisano' }[this.status] || ''; },
         text() { return this.draft ?? (this.value === null ? '' : formatRating(this.value)); },
     },
     methods: {
@@ -32,6 +35,7 @@ export default {
             await this.$store.dispatch('contests/save', { entryId: this.entry.id, voterId: this.voter.id });
             return true;
         },
+        retry() { this.$store.dispatch('contests/save', { entryId: this.entry.id, voterId: this.voter.id, retry: true }); },
         cancel(event) {
             this.$store.dispatch('contests/cancel', this.key);
             event.target.value = this.value === null ? '' : formatRating(this.value);
@@ -59,7 +63,11 @@ export default {
             :aria-describedby="medal ? 'rank-' + key : undefined" placeholder="—"
             @input="input" @blur="commit" @keydown.enter.prevent="commit" @keydown.esc.prevent="cancel"
             @keydown.up="navigate" @keydown.down="navigate" />
-        <span v-else>{{ formatRating(value) }}</span>
+        <span v-else>{{ draft !== undefined ? (draft || '—') : formatRating(value) }}</span>
+        <span v-if="(statusText || (!editable && draft !== undefined)) && !$store.state.preview" class="cell-status" :class="{ 'cell-error': status === 'error' }" role="status">
+            {{ statusText }}<button v-if="status === 'error' && editable" :disabled="!canCommit" @mousedown.prevent @click="retry" :aria-label="`Ponów zapis: ${entry.countryName}, ${voter.name}`">Ponów</button>
+            <button v-if="!editable && draft !== undefined" @click="$store.dispatch('contests/cancel', key)" :aria-label="`Odrzuć szkic: ${entry.countryName}, ${voter.name}`">Odrzuć szkic</button>
+        </span>
         <span v-if="medal" :id="'rank-' + key" class="medal-marker" :class="'medal-' + medal" :title="'Miejsce ' + medal"><span class="sr-only">Miejsce </span>{{ medal }}</span>
     </td>
 </template>

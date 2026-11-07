@@ -23,5 +23,5 @@ export function configureSupabase(env, factory = createClient) {
     }
 }
 
-// One SDK instance, shared by auth and future scoreboard services.
+// One SDK instance, shared by auth, scoreboard reads/writes and realtime.
 export const backend = configureSupabase(import.meta.env);
