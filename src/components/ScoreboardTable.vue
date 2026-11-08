@@ -6,6 +6,7 @@ import { summarize, sortedEntries, podium } from '../domain/ranking.js';
 import { formatRating } from '../domain/ratings.js';
 
 const flags = import.meta.glob('../../node_modules/flag-icons/flags/4x3/*.svg', { eager: true, query: '?url', import: 'default' });
+const averageFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 });
 
 export default {
     name: 'ScoreboardTable',
@@ -14,6 +15,16 @@ export default {
     computed: {
         contest() { return this.$store.state.contests.active; },
         entries() { return this.$store.getters['contests/entries']; },
+        overallAverage() {
+            const values = this.entries.flatMap(entry => this.contest.voters.map(voter => entry.ratings[voter.id])).filter(value => value != null);
+            return values.length ? averageFormat.format(values.reduce((sum, value) => sum + value, 0) / values.length) : '—';
+        },
+        averages() {
+            return Object.fromEntries(this.contest.voters.map(voter => {
+                const values = this.entries.map(entry => entry.ratings[voter.id]).filter(value => value != null);
+                return [voter.id, values.length ? averageFormat.format(values.reduce((sum, value) => sum + value, 0) / values.length) : '—'];
+            }));
+        },
         rows() { return sortedEntries(this.entries, this.sortKey, this.direction, this.contest.tieBreaks?.[this.sortKey]); },
         editable() { return this.$store.getters.canEdit; },
         canManage() { return this.$store.getters.canCommit && !this.$store.state.contests.voterBusy; },
@@ -67,6 +78,10 @@ export default {
 
 <template>
     <section class="scoreboard" aria-label="Tabela ocen">
+        <div class="contest-average" aria-label="Średnia ogólna" title="Średnia wszystkich zapisanych ocen w tej Eurowizji. Puste oceny są pomijane.">
+            <span>Średnia ogólna</span>
+            <span class="average-value"><strong>{{ overallAverage }}</strong><span class="average-scale">/ 10</span></span>
+        </div>
         <div class="table-scroll" tabindex="0" aria-label="Przewijana tabela wyników">
             <table>
                 <caption class="sr-only">{{ contest.title }}. Puste oceny nie wliczają się do sumy.</caption>
@@ -84,6 +99,13 @@ export default {
                     <RatingCell v-for="voter in contest.voters" :key="voter.id" :entry="entry" :voter="voter" :value="entry.ratings[voter.id]" :medal="medals[voter.id][entry.id] || 0" />
                     <td class="total" :title="summarize(entry).count > 0 && summarize(entry).count < summarize(entry).possible ? 'Suma niepełna' : undefined"><strong>{{ formatRating(summarize(entry).total) }}</strong><span v-if="medals.total[entry.id]" class="medal-marker" :class="'medal-' + medals.total[entry.id]" :title="'Miejsce ' + medals.total[entry.id]"><span class="sr-only">Miejsce </span>{{ medals.total[entry.id] }}</span></td>
                 </tr></tbody>
+                <tfoot><tr>
+                    <td class="order"></td>
+                    <th scope="row" class="country">Średnia ocena</th>
+                    <td class="entry-details"></td>
+                    <td v-for="voter in contest.voters" :key="voter.id" class="average-cell">{{ averages[voter.id] }}</td>
+                    <td class="total"></td>
+                </tr></tfoot>
             </table>
         </div>
         <dialog ref="personDialog" class="person-dialog" aria-labelledby="person-dialog-title" aria-describedby="person-dialog-description" @cancel.prevent="closePerson">
