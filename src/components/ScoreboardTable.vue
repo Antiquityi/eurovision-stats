@@ -1,6 +1,7 @@
 <script>
 import RatingCell from './RatingCell.vue';
 import VoterHeader from './VoterHeader.vue';
+import EntryDetailsCell from './EntryDetailsCell.vue';
 import { summarize, sortedEntries, podium } from '../domain/ranking.js';
 import { formatRating } from '../domain/ratings.js';
 
@@ -8,7 +9,7 @@ const flags = import.meta.glob('../../node_modules/flag-icons/flags/4x3/*.svg', 
 
 export default {
     name: 'ScoreboardTable',
-    components: { RatingCell, VoterHeader },
+    components: { RatingCell, VoterHeader, EntryDetailsCell },
     data() { return { sortKey: 'order', direction: 'desc', personDialog: null, personName: '', personBusy: false, personError: '' }; },
     computed: {
         contest() { return this.$store.state.contests.active; },
@@ -72,12 +73,14 @@ export default {
                 <thead><tr>
                     <th scope="col" class="order" :aria-sort="ariaSort('order')"><button data-sort="order" @click="sort('order')" aria-label="Przywróć kolejność występów">Nr <span class="sort-indicator" aria-hidden="true">{{ sortKey === 'order' ? '↑' : '↕' }}</span></button></th>
                     <th scope="col" class="country">Kraj</th>
+                    <th scope="col" class="entry-details">Wykonawca i utwór</th>
                     <th v-for="voter in contest.voters" :key="voter.id" scope="col" :aria-sort="ariaSort(voter.id)"><VoterHeader :voter="voter" :indicator="sortKey === voter.id ? direction === 'desc' ? '↓' : '↑' : '↕'" @sort="sort(voter.id)" @delete="openPerson('delete', $event)" /></th>
                     <th scope="col" class="total" :aria-sort="ariaSort('total')"><button data-sort="total" @click="sort('total')">Suma <span class="sort-indicator" aria-hidden="true">{{ sortKey === 'total' ? direction === 'desc' ? '↓' : '↑' : '↕' }}</span></button></th>
                 </tr></thead>
                 <tbody><tr v-for="entry in rows" :key="entry.id">
                     <td class="order">{{ String(entry.order).padStart(2, '0') }}</td>
                     <th scope="row" class="country"><div class="country-line"><img :src="flag(entry.countryCode)" alt="" width="28" height="21" /><div>{{ entry.countryName }}</div></div></th>
+                    <EntryDetailsCell :key="contest.id + ':' + entry.id" :entry="entry" :contest-id="contest.id" />
                     <RatingCell v-for="voter in contest.voters" :key="voter.id" :entry="entry" :voter="voter" :value="entry.ratings[voter.id]" :medal="medals[voter.id][entry.id] || 0" />
                     <td class="total" :title="summarize(entry).count > 0 && summarize(entry).count < summarize(entry).possible ? 'Suma niepełna' : undefined"><strong>{{ formatRating(summarize(entry).total) }}</strong><span v-if="medals.total[entry.id]" class="medal-marker" :class="'medal-' + medals.total[entry.id]" :title="'Miejsce ' + medals.total[entry.id]"><span class="sr-only">Miejsce </span>{{ medals.total[entry.id] }}</span></td>
                 </tr></tbody>

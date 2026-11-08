@@ -11,6 +11,18 @@ function sdk(result) {
 }
 
 describe('contest SDK boundary', () => {
+    it('saves combined entry details through the approved-editor RPC, including clearing', async () => {
+        const rpc = vi.fn().mockResolvedValue({ data: 'Artysta — Utwór', error: null });
+        const service = createContestService({ rpc });
+        expect(await service.saveEntryDetails('c', 'e', '  Artysta — Utwór ')).toBe('Artysta — Utwór');
+        expect(rpc).toHaveBeenLastCalledWith('set_entry_details', { p_contest_id: 'c', p_entry_id: 'e', p_artist_song: 'Artysta — Utwór' });
+        await service.saveEntryDetails('c', 'e', '');
+        expect(rpc).toHaveBeenLastCalledWith('set_entry_details', { p_contest_id: 'c', p_entry_id: 'e', p_artist_song: '' });
+        await expect(service.saveEntryDetails('c', 'e', 'x'.repeat(201))).rejects.toThrow();
+        expect(rpc).toHaveBeenCalledTimes(2);
+        rpc.mockResolvedValueOnce({ error: new Error('denied') });
+        await expect(service.saveEntryDetails('c', 'e', 'Song')).rejects.toThrow('denied');
+    });
     it('saves or resets a tie through the permission-checked RPC', async () => {
         const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
         const service = createContestService({ rpc });
@@ -33,15 +45,15 @@ describe('contest SDK boundary', () => {
         rpc.mockResolvedValueOnce({ data: null, error: new Error('denied') });
         await expect(service.manageVoter('c', { action: 'rename', voterId: 'v', name: 'Anna' })).rejects.toThrow('denied');
     });
-    it('maps public rows to scoreboard entries and orders voters without metadata', async () => {
+    it('maps public rows including the combined artist/song field and orders voters', async () => {
         const { query, client } = sdk({ data: { id: 'c', year: 2026, title: 'Eurowizja 2026',
             voters: [{ id: 'b', position: 2 }, { id: 'a', position: 1 }],
-            entries: [{ id: 'e', order: 1, country_code: 'PL', country_name: 'Polska' }], ratings: [] }, error: null });
+            entries: [{ id: 'e', order: 1, country_code: 'PL', country_name: 'Polska', artist_song: 'Artist — Song' }], ratings: [] }, error: null });
         const contest = await createContestService(client).getContest('c');
         expect(query.eq).toHaveBeenCalledWith('id', 'c');
         expect(contest.voters.map(voter => voter.id)).toEqual(['a', 'b']);
-        expect(contest.entries).toEqual([{ id: 'e', order: 1, countryCode: 'PL', countryName: 'Polska', ratings: { a: null, b: null } }]);
-        expect(query.select.mock.calls[0][0]).not.toMatch(/artist|song/);
+        expect(contest.entries).toEqual([{ id: 'e', order: 1, countryCode: 'PL', countryName: 'Polska', artistSong: 'Artist — Song', ratings: { a: null, b: null } }]);
+        expect(query.select.mock.calls[0][0]).toContain('artist_song');
     });
     it('updates only one pair and value, returning the authoritative revision; rejects invalid inputs', async () => {
         const result = { entry_id: 'e', voter_id: 'v', value: 0, revision: 9 };

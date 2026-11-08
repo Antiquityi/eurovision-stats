@@ -10,6 +10,12 @@ function checked({ data, error }) {
 
 export function createContestService(client) {
     return {
+        async saveEntryDetails(contestId, entryId, text) {
+            if (typeof text !== 'string' || [...text.trim()].length > 200) throw new Error('Wpisz maksymalnie 200 znaków.');
+            return checked(await client.rpc('set_entry_details', {
+                p_contest_id: contestId, p_entry_id: entryId, p_artist_song: text.trim(),
+            }));
+        },
         async resolveTie(contestId, { scope, score, entryIds, reset = false }) {
             return checked(await client.rpc('resolve_podium_tie', {
                 p_contest_id: contestId, p_scope: scope, p_score: score,
@@ -28,13 +34,14 @@ export function createContestService(client) {
         },
         async getContest(id) {
             // A single embedded SELECT supplies a consistent database snapshot.
-            const data = checked(await client.from('contests').select(`id,year,title,tie_breaks,voters(id,key,name,position),entries(id,order,country_code,country_name),ratings(${ratingFields})`).eq('id', id).single());
+            const data = checked(await client.from('contests').select(`id,year,title,tie_breaks,voters(id,key,name,position),entries(id,order,country_code,country_name,artist_song),ratings(${ratingFields})`).eq('id', id).single());
             const voters = data.voters.sort((a, b) => a.position - b.position);
             return {
                 id: data.id, year: data.year, title: data.title, voters, ratings: data.ratings,
                 tieBreaks: data.tie_breaks ?? {},
                 entries: data.entries.sort((a, b) => a.order - b.order).map(entry => ({
                     id: entry.id, order: entry.order, countryCode: entry.country_code, countryName: entry.country_name,
+                    artistSong: entry.artist_song ?? '',
                     ratings: Object.fromEntries(voters.map(voter => [voter.id, null])),
                 })),
             };

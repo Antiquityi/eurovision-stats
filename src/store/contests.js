@@ -47,6 +47,11 @@ export function createContestsModule(copies, { service = null, realtime = null, 
         },
         getters: { entries: state => state.active?.entries ?? [] },
         mutations: {
+            entryDetails(state, { contestId, entryId, text }) {
+                if (state.active?.id !== contestId) return;
+                const entry = state.active.entries.find(row => row.id === entryId);
+                if (entry) entry.artistSong = text;
+            },
             list(state, list) { state.list = newestFirst(list); },
             select(state, id) { state.selectedId = id; state.active = copies.find(contest => contest.id === id) ?? null; },
             draft(state, { key, text }) {
@@ -112,6 +117,21 @@ export function createContestsModule(copies, { service = null, realtime = null, 
             },
         },
         actions: {
+            async saveEntryDetails({ state, rootState, rootGetters, commit, dispatch }, { contestId, entryId, text }) {
+                if (!rootGetters.canCommit || state.active?.id !== contestId
+                    || !state.active.entries.some(entry => entry.id === entryId)) throw new Error('Zmiana jest teraz niedostępna.');
+                if (typeof text !== 'string' || [...text.trim()].length > 200) throw new Error('Wpisz maksymalnie 200 znaków.');
+                const operation = lifecycle;
+                try {
+                    const saved = rootState.preview ? text.trim() : await service.saveEntryDetails(contestId, entryId, text.trim());
+                    if (!rootState.preview && refresh) await refresh;
+                    if (operation === lifecycle) commit('entryDetails', { contestId, entryId, text: saved });
+                    if (!rootState.preview && running && operation === lifecycle && state.active?.id === contestId) await dispatch('refresh');
+                } catch {
+                    if (!rootState.preview && running && operation === lifecycle) void dispatch('auth/refresh', null, { root: true });
+                    throw new Error('Nie udało się zapisać utworu. Spróbuj ponownie.');
+                }
+            },
             async resolveTie({ state, rootState, rootGetters, commit, dispatch }, selection) {
                 if (!rootGetters.canCommit || !state.active) throw new Error('Zmiana jest teraz niedostępna.');
                 const { scope, score, entryIds } = selection;
