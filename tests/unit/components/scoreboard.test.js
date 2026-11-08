@@ -6,8 +6,8 @@ import { createScoreboardStore } from '../../../src/store/index.js';
 import { createPreviewContests } from '../../fixtures/scoreboard.js';
 
 const wrappers = [];
-function render(component = App, editable = true) {
-    const store = createScoreboardStore(createPreviewContests(), { editable });
+function render(component = App, editable = true, contests = createPreviewContests()) {
+    const store = createScoreboardStore(contests, { editable });
     const wrapper = mount(component, { attachTo: document.body, global: { plugins: [store] } });
     wrappers.push(wrapper);
     return { wrapper, store };
@@ -18,6 +18,50 @@ const order = wrapper => wrapper.findAll('tbody .order').map(cell => cell.text()
 afterEach(() => { wrappers.splice(0).forEach(wrapper => wrapper.unmount()); });
 
 describe('spreadsheet workspace', () => {
+    it('averages each person’s saved scores per contest, including zero and excluding blanks', async () => {
+        const contests = createPreviewContests();
+        for (const entry of contests[0].entries) {
+            for (const voter of contests[0].voters) entry.ratings[voter.id] = null;
+        }
+        [0, 0.5, 9].forEach((value, index) => { contests[0].entries[index].ratings.pawel = value; });
+        contests[0].entries[0].ratings.albert = 10;
+        const { wrapper } = render(App, true, contests);
+        const averages = () => wrapper.findAll('tfoot .average-cell').map(cell => cell.text());
+        const overall = () => wrapper.get('.contest-average strong').text();
+        expect(wrapper.get('tfoot th').text()).toBe('Średnia ocena');
+        expect(averages()).toEqual(['3,17', '10', '—', '—']);
+        expect(overall()).toBe('4,88');
+        await inputFor(wrapper).setValue('6');
+        expect(averages()[0]).toBe('3,17');
+        expect(overall()).toBe('4,88');
+        await inputFor(wrapper).trigger('keydown', { key: 'Enter' });
+        expect(averages()[0]).toBe('5,17');
+        expect(overall()).toBe('6,38');
+        await wrapper.get('button[data-sort="pawel"]').trigger('click');
+        expect(averages()[0]).toBe('5,17');
+        expect(overall()).toBe('6,38');
+        await wrapper.get('nav button:last-child').trigger('click');
+        expect(averages()[0]).not.toBe('5,17');
+        expect(overall()).not.toBe('6,38');
+        await wrapper.get('nav button:first-child').trigger('click');
+        expect(averages()[0]).toBe('5,17');
+        expect(overall()).toBe('6,38');
+        await inputFor(wrapper).setValue('');
+        await inputFor(wrapper).trigger('blur');
+        expect(averages()[0]).toBe('4,75');
+        expect(overall()).toBe('6,5');
+    });
+    it('shows a blank overall average without scores and includes a lone zero', async () => {
+        const contests = createPreviewContests();
+        for (const entry of contests[0].entries) {
+            for (const voter of contests[0].voters) entry.ratings[voter.id] = null;
+        }
+        const { wrapper } = render(ScoreboardTable, true, contests);
+        expect(wrapper.get('.contest-average strong').text()).toBe('—');
+        await inputFor(wrapper).setValue('0');
+        await inputFor(wrapper).trigger('blur');
+        expect(wrapper.get('.contest-average strong').text()).toBe('0');
+    });
     it('starts with year tabs and a table, without marketing sections', () => {
         const { wrapper } = render();
         expect(wrapper.get('nav[aria-label="Wybierz rok"]').text()).toContain('2025');
