@@ -29,6 +29,23 @@ async function harness(options = {}) {
 }
 
 describe('live confirmed state and per-cell writes', () => {
+    it('saves entry details, refreshes the shared snapshot and rejects unavailable or cross-contest writes', async () => {
+        const changed = snapshot();
+        changed.entries[0].artistSong = 'Artist — Song';
+        const h = await harness({ saveEntryDetails: vi.fn().mockResolvedValue('Artist — Song') });
+        h.service.getContest.mockResolvedValue(changed);
+        const selection = { contestId: 'contest', entryId: 'entry', text: ' Artist — Song ' };
+        await h.store.dispatch('contests/saveEntryDetails', selection);
+        expect(h.service.saveEntryDetails).toHaveBeenCalledExactlyOnceWith('contest', 'entry', 'Artist — Song');
+        expect(h.store.state.contests.active.entries[0].artistSong).toBe('Artist — Song');
+        expect(h.value()).toBe(1);
+        h.store.commit('auth/access', true);
+        await expect(h.store.dispatch('contests/saveEntryDetails', { ...selection, contestId: 'other' })).rejects.toThrow();
+        h.store.commit('auth/access', false);
+        await expect(h.store.dispatch('contests/saveEntryDetails', selection)).rejects.toThrow();
+        expect(h.service.saveEntryDetails).toHaveBeenCalledTimes(1);
+        await h.stop();
+    });
     it('saves a tie and reloads shared choices without changing scores or another scope', async () => {
         const h = await harness();
         const tied = snapshot();

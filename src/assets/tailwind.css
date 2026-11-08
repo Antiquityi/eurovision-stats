@@ -102,9 +102,18 @@ thead th:has(.is-menu-open) { z-index: 8; }
 @keyframes person-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 [aria-sort='ascending'] .sort-indicator, [aria-sort='descending'] .sort-indicator { opacity: 1; color: var(--color-fn-green); }
 .order { position: sticky; left: 0; width: 48px; min-width: 48px; max-width: 48px; background: var(--surface); color: var(--muted); font-size: 11px; z-index: 2; }
-.country { position: sticky; left: 48px; background: var(--surface); min-width: 200px; width: 24%; text-align: left; z-index: 2; border-right: 1px solid var(--line); }
+.country { position: sticky; left: 48px; background: var(--surface); min-width: 164px; width: 164px; text-align: left; z-index: 2; border-right: 1px solid var(--line); }
 thead .country, thead .order { z-index: 4; background: var(--header); }
-.country-line { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 500; }
+.country-line { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+.country-line img { flex: none; }
+.entry-details { min-width: 250px; width: 26%; text-align: left; border-right: 1px solid var(--line); }
+.entry-details input { display: block; width: 100%; height: 34px; padding: 0 7px; margin-left: -7px; border: 1px solid transparent; border-radius: 3px; outline: none; background: transparent; color: var(--ink); font-size: 12px; text-overflow: ellipsis; transition: background 120ms, border-color 120ms; }
+.entry-details input::placeholder { color: var(--muted); opacity: .55; }
+.entry-details input:hover { border-color: var(--line); }
+.entry-details input:focus { background: var(--paper); border-color: var(--color-fn-green); }
+.entry-details input:disabled { opacity: .65; }
+.entry-details-text { display: block; font-size: 12px; overflow-wrap: anywhere; padding: 8px 0; }
+.entry-details-feedback { display: block; max-width: 250px; padding: 0 0 4px; font-size: 10px; }
 .country-line img { object-fit: cover; width: 24px; height: 18px; border-radius: 2px; box-shadow: 0 0 0 1px var(--line); }
 .rating-cell { position: relative; min-width: 130px; padding: 6px 42px; font-family: var(--number-font); font-size: 14px; font-weight: 400; border-right: 1px solid var(--line); }
 .rating-cell input { display: block; width: 100%; min-width: 44px; height: 36px; text-align: center; background: transparent; border: 1px solid transparent; border-radius: 3px; color: inherit; outline: none; font-variant-numeric: tabular-nums; transition: border-color 120ms, background 120ms; }
@@ -180,7 +189,8 @@ tbody tr:hover .country, tbody tr:focus-within .country, tbody tr:hover .order {
     .preview-label { font-size: 9px; }
     .workspace-actions { gap: 10px; padding: 6px 0; }
     .voter-heading .voter-menu-trigger { opacity: .8; }
-    .country { min-width: 150px; width: 150px; }
+    .country { min-width: 140px; width: 140px; }
+    .entry-details { min-width: 220px; }
     .country-line { font-size: 12px; gap: 8px; }
     .country-line img { width: 22px; height: 16.5px; }
     th, td { padding: 0 8px; height: 46px; }

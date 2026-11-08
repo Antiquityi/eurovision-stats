@@ -10,6 +10,7 @@ Anyone can view the results; approved GitHub accounts can edit scores together.
 - Shared tie resolution for equal-scoring podium places.
 - Historical year tabs and named contests, with shareable selection links.
 - Person column management for approved editors.
+- One combined artist/song field per country, editable inline by approved editors.
 - Responsive layout with horizontal scrolling on smaller screens.
 
 ## Stack
@@ -53,6 +54,10 @@ real database.
 Run the SQL files in [supabase/migrations](supabase/migrations/) in filename order
 through the Supabase SQL Editor. Apply each migration once; for an existing
 project, apply only migrations that have not already been run.
+
+For the artist/song column, apply `20261108000200_entry_details.sql` before running
+the updated frontend. Existing entries start blank. Enter or leaving the field
+saves changes; Escape cancels the current edit. Clear the field to remove its text.
 
 Contests, countries and their complete rating matrices are provisioned through
 owner-run SQL. Each country/person pair needs a rating row, including blank scores

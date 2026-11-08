@@ -5,6 +5,35 @@ test.beforeEach(async ({ page }) => {
     await page.route(/\/src\/services\/supabase\.js(?:\?.*)?$/, route => route.fulfill({ contentType: 'application/javascript', body: "export const backend = { client: null, configured: false, error: '' };" }));
 });
 
+test('combined artist/song column saves inline and fits beside a compact sticky country column', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto('/');
+    const first = page.locator('tbody tr').first();
+    const details = first.locator('.entry-details input');
+    await expect(page.getByRole('columnheader', { name: 'Wykonawca i utwór', exact: true })).toBeVisible();
+    await details.fill('Artysta — Tytuł utworu');
+    await details.press('Enter');
+    await details.fill('Cancel this');
+    await details.press('Escape');
+    await expect(details).toHaveValue('Artysta — Tytuł utworu');
+    await page.getByRole('button', { name: '2024', exact: true }).click();
+    await expect(details).toHaveValue('');
+    await page.getByRole('button', { name: '2025', exact: true }).click();
+    await expect(details).toHaveValue('Artysta — Tytuł utworu');
+    const country = await first.locator('.country').boundingBox();
+    const song = await first.locator('.entry-details').boundingBox();
+    expect(country.width).toBeLessThan(200);
+    expect(song.x).toBeCloseTo(country.x + country.width, 0);
+    await page.screenshot({ path: 'test-results/entry-details-desktop.png', fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await details.fill('Bardzo długi wykonawca — Bardzo długi tytuł utworu');
+    await details.press('Tab');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const scroll = page.locator('.table-scroll');
+    await scroll.evaluate(element => { element.scrollLeft = 0; });
+    await page.screenshot({ path: 'test-results/entry-details-mobile.png', fullPage: true });
+});
+
 test('named contests in the same year have distinct tabs and survive reload and browser navigation', async ({ page }) => {
     await page.route(/\/src\/main\.js(?:\?.*)?$/, route => route.fulfill({
         contentType: 'application/javascript',
@@ -56,13 +85,13 @@ test('editors confirm adding/deleting people and rename inline without changing 
     await expect(dialog).toContainText('Dodać nową osobę do tabeli 2025?');
     await page.screenshot({ path: 'test-results/person-add-dialog.png', animations: 'disabled' });
     await dialog.getByRole('button', { name: 'Anuluj' }).click();
-    await expect(page.locator('thead th')).toHaveCount(7);
+    await expect(page.locator('thead th')).toHaveCount(8);
     await page.getByRole('button', { name: 'Dodaj osobę', exact: true }).click();
     await dialog.getByLabel('Imię', { exact: true }).fill('Ewa');
     await dialog.getByRole('button', { name: 'Dodaj osobę', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Dania, Ewa', exact: true })).toHaveValue('');
-    await expect(page.locator('thead th')).toHaveCount(8);
+    await expect(page.locator('thead th')).toHaveCount(9);
     await page.getByRole('textbox', { name: 'Dania, Ewa', exact: true }).fill('10');
     await page.getByRole('textbox', { name: 'Dania, Ewa', exact: true }).press('Enter');
     await page.getByRole('button', { name: 'Opcje osoby: Ewa', exact: true }).click();
@@ -75,7 +104,7 @@ test('editors confirm adding/deleting people and rename inline without changing 
     await page.getByRole('menuitem', { name: 'Usuń osobę: Ewa', exact: true }).click();
     await dialog.getByRole('button', { name: 'Usuń osobę', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Dania, Ewa', exact: true })).toHaveCount(0);
-    await expect(page.locator('thead th')).toHaveCount(7);
+    await expect(page.locator('thead th')).toHaveCount(8);
     await expect(page.getByRole('textbox', { name: 'Dania, Piotr', exact: true })).toHaveValue('8');
 });
 
